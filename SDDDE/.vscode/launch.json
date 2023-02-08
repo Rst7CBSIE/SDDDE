@@ -1,0 +1,26 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "amiga",
+            "request": "launch",
+            "preLaunchTask": "compile",
+            "name": "Amiga 1200",
+            "config": "A1200",
+            //"fastmem": "4M",
+            "program": "${workspaceFolder}/a.mingw",
+            "kickstart": "D:/ZX/KICK31.rom",
+            "internalConsoleOptions": "openOnSessionStart"
+        }/*,
+        {
+            "type": "amiga",
+            "request": "launch",
+            "preLaunchTask": "compile",
+            "name": "Amiga 4000",
+            "config": "A4000",
+            "program": "${workspaceFolder}/a.mingw",
+            "kickstart": "D:/ZX/KICK31.rom",
+            "internalConsoleOptions": "openOnSessionStart"
+        }*/      
+    ]
+}
