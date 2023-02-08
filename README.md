@@ -1,7 +1,8 @@
 # SDDDE
 Small 3D engine for Amiga A1200
+(C) 2023 by Rst7/CBSIE
 
-You can find here
+You can find here:
 
 /Map - PC version of the engine (built with MSVS, C++ and WinForms). Also used for data conversion PC=>Amiga
 
