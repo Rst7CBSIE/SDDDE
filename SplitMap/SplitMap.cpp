@@ -298,9 +298,9 @@ VERTEX* CreateVertex(double X, double Y, double Z, double U, double V)
     return v;
 }
 
-//Посчитаем коэффициенты ABCD
-//Это и нормаль, и уравнение плоскости для упирания в стенки при движении
-//Вообще по хорошим делам надо бы выбрать самые хорошие вектора, с наибольшей точностью, но пока пусть будет так
+//РџРѕСЃС‡РёС‚Р°РµРј РєРѕСЌС„С„РёС†РёРµРЅС‚С‹ ABCD
+//Р­С‚Рѕ Рё РЅРѕСЂРјР°Р»СЊ, Рё СѓСЂР°РІРЅРµРЅРёРµ РїР»РѕСЃРєРѕСЃС‚Рё РґР»СЏ СѓРїРёСЂР°РЅРёСЏ РІ СЃС‚РµРЅРєРё РїСЂРё РґРІРёР¶РµРЅРёРё
+//Р’РѕРѕР±С‰Рµ РїРѕ С…РѕСЂРѕС€РёРј РґРµР»Р°Рј РЅР°РґРѕ Р±С‹ РІС‹Р±СЂР°С‚СЊ СЃР°РјС‹Рµ С…РѕСЂРѕС€РёРµ РІРµРєС‚РѕСЂР°, СЃ РЅР°РёР±РѕР»СЊС€РµР№ С‚РѕС‡РЅРѕСЃС‚СЊСЋ, РЅРѕ РїРѕРєР° РїСѓСЃС‚СЊ Р±СѓРґРµС‚ С‚Р°Рє
 int ComputeABCD(FACE* face)
 {
     double MX, MY, MZ;
@@ -336,7 +336,7 @@ int ComputeABCD(FACE* face)
     v = face->v;
     double x1, x2, y1, y2, z1, z2;
     double bx, by, bz;
-    //На самом деле в реальной жизни мы заменим сдвиг на 8 простым взятием одного байта
+    //РќР° СЃР°РјРѕРј РґРµР»Рµ РІ СЂРµР°Р»СЊРЅРѕР№ Р¶РёР·РЅРё РјС‹ Р·Р°РјРµРЅРёРј СЃРґРІРёРі РЅР° 8 РїСЂРѕСЃС‚С‹Рј РІР·СЏС‚РёРµРј РѕРґРЅРѕРіРѕ Р±Р°Р№С‚Р°
     x1 = v->prev->X;
     y1 = v->prev->Y;
     z1 = v->prev->Z;
@@ -356,15 +356,15 @@ int ComputeABCD(FACE* face)
         z1 = z2;
     } while ((v = v->next) != 0);
     s = bx * bx + by * by + bz * bz;
-    bl = sqrt(s); //После корня получим 16.16
+    bl = sqrt(s); //РџРѕСЃР»Рµ РєРѕСЂРЅСЏ РїРѕР»СѓС‡РёРј 16.16
     if (bl < 0.1)
     {
-        return 0; //Слишком маленькая грань
+        return 0; //РЎР»РёС€РєРѕРј РјР°Р»РµРЅСЊРєР°СЏ РіСЂР°РЅСЊ
     }
     bx = bx / bl;
     by = by / bl;
     bz = bz / bl;
-    //Считаем свободный коэффициент
+    //РЎС‡РёС‚Р°РµРј СЃРІРѕР±РѕРґРЅС‹Р№ РєРѕСЌС„С„РёС†РёРµРЅС‚
     s = bx * face->MX; //16.16*24.8 => 48.24
     s += by * face->MY;
     s += bz * face->MZ;
@@ -607,7 +607,7 @@ FACE *LoadObj(const char *filename)
                     v = InsertNewVertexToFace(face, U, V, p);
                     v->TVn = vt;
                 }
-                //Нам надо заполнить поля common_edge
+                //РќР°Рј РЅР°РґРѕ Р·Р°РїРѕР»РЅРёС‚СЊ РїРѕР»СЏ common_edge
                 ADDQ(f, face);
                 ComputeABCD(face);
                 //UpdateCommonEdges(face, 0);
@@ -758,7 +758,7 @@ typedef struct
     int8_t split;
 }KDTREE_NODE;
 
-KDTREE_NODE kd_tree[65536 * 2]; //Потому что мы всегда парами дергаем
+KDTREE_NODE kd_tree[65536 * 2]; //РџРѕС‚РѕРјСѓ С‡С‚Рѕ РјС‹ РІСЃРµРіРґР° РїР°СЂР°РјРё РґРµСЂРіР°РµРј
 
 uint32_t kd_tree_top;
 
@@ -820,7 +820,7 @@ VERTEX* ComputeSectionAndCreateVertex(double t1, double t2, VERTEX* vs1, VERTEX*
         t1 /= t2;
     }
     else
-        t1 = 1.0; //Хотя это и не ожидаемое поведение, но еще возможны ошибки вычисления
+        t1 = 1.0; //РҐРѕС‚СЏ СЌС‚Рѕ Рё РЅРµ РѕР¶РёРґР°РµРјРѕРµ РїРѕРІРµРґРµРЅРёРµ, РЅРѕ РµС‰Рµ РІРѕР·РјРѕР¶РЅС‹ РѕС€РёР±РєРё РІС‹С‡РёСЃР»РµРЅРёСЏ
 
     VERTEX* vd = CreateVertex(
         vs1->X + (vs2->X - vs1->X) * t1,
@@ -868,7 +868,7 @@ void ConstructKDtree_step(KDTREE_NODE *root, FACEQ *froot, int xa, int ya, int z
     best_split = 0;
     if (!froot)
     {
-        //Нет граней, проверяем размер ячейки
+        //РќРµС‚ РіСЂР°РЅРµР№, РїСЂРѕРІРµСЂСЏРµРј СЂР°Р·РјРµСЂ СЏС‡РµР№РєРё
         int max_sz = INT32_MIN;
         int sz;
         sz = xb - xa;
@@ -892,16 +892,16 @@ void ConstructKDtree_step(KDTREE_NODE *root, FACEQ *froot, int xa, int ya, int z
             best_axis = 2;
             best_split = (za + zb) / 2;
         }
-        if (max_sz > 8) goto L_split; //Размер большой, надо бы порезать
+        if (max_sz > 8) goto L_split; //Р Р°Р·РјРµСЂ Р±РѕР»СЊС€РѕР№, РЅР°РґРѕ Р±С‹ РїРѕСЂРµР·Р°С‚СЊ
         //printf("no faces\n");
         root->next_index = 0;
         empty_box_index++;
-        root->axis = 0xFE; //Пустой лист
+        root->axis = 0xFE; //РџСѓСЃС‚РѕР№ Р»РёСЃС‚
         return;
     }
     if (((xa + 1) == xb) && ((ya + 1) == yb) && ((za + 1) == zb))
     {
-        //Бокс минимального размера, просто добавляем в него список граней
+        //Р‘РѕРєСЃ РјРёРЅРёРјР°Р»СЊРЅРѕРіРѕ СЂР°Р·РјРµСЂР°, РїСЂРѕСЃС‚Рѕ РґРѕР±Р°РІР»СЏРµРј РІ РЅРµРіРѕ СЃРїРёСЃРѕРє РіСЂР°РЅРµР№
         //printf("minimum size\n");
         //printf(".");
         kd_tree_leafs_IJK[kd_tree_leafs_top] =
@@ -915,8 +915,8 @@ void ConstructKDtree_step(KDTREE_NODE *root, FACEQ *froot, int xa, int ya, int z
             raw_face_lists_size++;
         return;
     }
-    //Бокс можно поделить
-    uint32_t bins[256]; //Корзина
+    //Р‘РѕРєСЃ РјРѕР¶РЅРѕ РїРѕРґРµР»РёС‚СЊ
+    uint32_t bins[256]; //РљРѕСЂР·РёРЅР°
     int NA, NB;
 
     int64_t min_sah;
@@ -924,7 +924,7 @@ void ConstructKDtree_step(KDTREE_NODE *root, FACEQ *froot, int xa, int ya, int z
     min_sah = MAXINT64;
 
 
-    //Ось X
+    //РћСЃСЊ X
     memset(bins, 0, sizeof(bins));
     NB = 0;
     for (FACEQ* fq2 = froot; fq2; fq2 = fq2->next)
@@ -948,7 +948,7 @@ void ConstructKDtree_step(KDTREE_NODE *root, FACEQ *froot, int xa, int ya, int z
             bins[128 + i]++;
         NB++;
     }
-    //Корзины построены, теперь ищем лучший вариант
+    //РљРѕСЂР·РёРЅС‹ РїРѕСЃС‚СЂРѕРµРЅС‹, С‚РµРїРµСЂСЊ РёС‰РµРј Р»СѓС‡С€РёР№ РІР°СЂРёР°РЅС‚
     NA = bins[128 + xa]; NB -= NA;
     //NB++;
     //NA++;
@@ -969,7 +969,7 @@ void ConstructKDtree_step(KDTREE_NODE *root, FACEQ *froot, int xa, int ya, int z
         NA += bins[128 + split];
         NB -= bins[128 + split];
     }
-    //Ось Y
+    //РћСЃСЊ Y
     memset(bins, 0, sizeof(bins));
     NB = 0;
     for (FACEQ* fq2 = froot; fq2; fq2 = fq2->next)
@@ -993,7 +993,7 @@ void ConstructKDtree_step(KDTREE_NODE *root, FACEQ *froot, int xa, int ya, int z
             bins[128 + i]++;
         NB++;
     }
-    //Корзины построены, теперь ищем лучший вариант
+    //РљРѕСЂР·РёРЅС‹ РїРѕСЃС‚СЂРѕРµРЅС‹, С‚РµРїРµСЂСЊ РёС‰РµРј Р»СѓС‡С€РёР№ РІР°СЂРёР°РЅС‚
     NA = bins[128 + ya]; NB -= NA;
     //NB++;
     //NA++;
@@ -1014,7 +1014,7 @@ void ConstructKDtree_step(KDTREE_NODE *root, FACEQ *froot, int xa, int ya, int z
         NA += bins[128 + split];
         NB -= bins[128 + split];
     }
-    //Ось Z
+    //РћСЃСЊ Z
     memset(bins, 0, sizeof(bins));
     NB = 0;
     for (FACEQ* fq2 = froot; fq2; fq2 = fq2->next)
@@ -1038,7 +1038,7 @@ void ConstructKDtree_step(KDTREE_NODE *root, FACEQ *froot, int xa, int ya, int z
             bins[128 + i]++;
         NB++;
     }
-    //Корзины построены, теперь ищем лучший вариант
+    //РљРѕСЂР·РёРЅС‹ РїРѕСЃС‚СЂРѕРµРЅС‹, С‚РµРїРµСЂСЊ РёС‰РµРј Р»СѓС‡С€РёР№ РІР°СЂРёР°РЅС‚
     NA = bins[128 + za]; NB -= NA;
     //NB++;
     //NA++;
@@ -1059,9 +1059,9 @@ void ConstructKDtree_step(KDTREE_NODE *root, FACEQ *froot, int xa, int ya, int z
         NA += bins[128 + split];
         NB -= bins[128 + split];
     }
-    //Лучшее разбиение выбрано
+    //Р›СѓС‡С€РµРµ СЂР°Р·Р±РёРµРЅРёРµ РІС‹Р±СЂР°РЅРѕ
     //printf("% .1f % d % d\n", min_sah / 1.0, best_axis, best_split);
-    //Теперь делим по выбранной оси на две части
+    //РўРµРїРµСЂСЊ РґРµР»РёРј РїРѕ РІС‹Р±СЂР°РЅРЅРѕР№ РѕСЃРё РЅР° РґРІРµ С‡Р°СЃС‚Рё
 L_split:
     FACEQ* fqa;
     FACEQ* fqb;
@@ -1111,7 +1111,7 @@ L_split:
             fqb = fq;
             break;
         default:
-            //Нужно разделить на две грани
+            //РќСѓР¶РЅРѕ СЂР°Р·РґРµР»РёС‚СЊ РЅР° РґРІРµ РіСЂР°РЅРё
             {
                 FACE* face_a = AllocFace();
                 FACE* face_b = AllocFace();
@@ -1126,7 +1126,7 @@ L_split:
                     t2 = *C - split;
                     if ((t1 < 0.0 && t2 >= 0.0) || (t1 >= 0.0 && t2 < 0.0))
                     {
-                        //Нужно создать новый вертекс
+                        //РќСѓР¶РЅРѕ СЃРѕР·РґР°С‚СЊ РЅРѕРІС‹Р№ РІРµСЂС‚РµРєСЃ
                         VERTEX* nv;
                         nv = ComputeSectionAndCreateVertex(t1, t2, v1, v2);
                         InsertVertexToFace(face_a, nv);
@@ -1144,11 +1144,11 @@ L_split:
                         InsertVertexToFace(face_b, nv);
                     }
                 }
-                //Все, мы разделились на две грани, запоминаем, кто папа
+                //Р’СЃРµ, РјС‹ СЂР°Р·РґРµР»РёР»РёСЃСЊ РЅР° РґРІРµ РіСЂР°РЅРё, Р·Р°РїРѕРјРёРЅР°РµРј, РєС‚Рѕ РїР°РїР°
                 if (f->parent_face)
                 {
                     face_b->parent_face = face_a->parent_face = f->parent_face;
-                    //У нас есть родитель, грань, которую мы только что разбили можно убить
+                    //РЈ РЅР°СЃ РµСЃС‚СЊ СЂРѕРґРёС‚РµР»СЊ, РіСЂР°РЅСЊ, РєРѕС‚РѕСЂСѓСЋ РјС‹ С‚РѕР»СЊРєРѕ С‡С‚Рѕ СЂР°Р·Р±РёР»Рё РјРѕР¶РЅРѕ СѓР±РёС‚СЊ
                     DestructFace(f);
                 }
                 else
@@ -1176,7 +1176,7 @@ L_split:
             break;
         }
     }
-    //Все разделили, создаем новых потомков
+    //Р’СЃРµ СЂР°Р·РґРµР»РёР»Рё, СЃРѕР·РґР°РµРј РЅРѕРІС‹С… РїРѕС‚РѕРјРєРѕРІ
     KDTREE_NODE* newnodes;
     newnodes = AllocKDTnode();
     root->axis = best_axis;
@@ -1201,7 +1201,7 @@ L_split:
 
 void ConstructKDtree(void)
 {
-    //Складываем все грани в список
+    //РЎРєР»Р°РґС‹РІР°РµРј РІСЃРµ РіСЂР°РЅРё РІ СЃРїРёСЃРѕРє
     printf("Construct kd_tree: ");
     kd_tree_top = 0;
     kd_tree_leafs_top = 0;
@@ -1214,7 +1214,7 @@ void ConstructKDtree(void)
         nf->next = fq;
         fq = nf;
     }
-    //Запускаем создание дерева
+    //Р—Р°РїСѓСЃРєР°РµРј СЃРѕР·РґР°РЅРёРµ РґРµСЂРµРІР°
     KDT_BoxA[0] = KDT_IBoxA[0] * MIN_BOX_SIZE;
     KDT_BoxA[1] = KDT_IBoxA[1] * MIN_BOX_SIZE;
     KDT_BoxA[2] = KDT_IBoxA[2] * MIN_BOX_SIZE;
@@ -1343,17 +1343,17 @@ int PackPVS(uint8_t* out, uint8_t* in, int len)
         len--;
         if (v == *in)
         {
-            //Пока значение постоянно, увеличиваем счетчик
+            //РџРѕРєР° Р·РЅР°С‡РµРЅРёРµ РїРѕСЃС‚РѕСЏРЅРЅРѕ, СѓРІРµР»РёС‡РёРІР°РµРј СЃС‡РµС‚С‡РёРє
             continue;
         }
-        //Значение будет новое, пробуем сохранить
+        //Р—РЅР°С‡РµРЅРёРµ Р±СѓРґРµС‚ РЅРѕРІРѕРµ, РїСЂРѕР±СѓРµРј СЃРѕС…СЂР°РЅРёС‚СЊ
         if (N > 7)
         {
-            //Пока у нас больше 63х одинаковых бит, выльем все наружу
+            //РџРѕРєР° Сѓ РЅР°СЃ Р±РѕР»СЊС€Рµ 63С… РѕРґРёРЅР°РєРѕРІС‹С… Р±РёС‚, РІС‹Р»СЊРµРј РІСЃРµ РЅР°СЂСѓР¶Сѓ
 #if 1
             if (N > 62)
             {
-                //Два байта размера
+                //Р”РІР° Р±Р°Р№С‚Р° СЂР°Р·РјРµСЂР°
                 if (v)
                 {
                     *out++ = 0x7F;
@@ -1393,7 +1393,7 @@ int PackPVS(uint8_t* out, uint8_t* in, int len)
         }
         else
         {
-            //Мало бит, войдет в септет
+            //РњР°Р»Рѕ Р±РёС‚, РІРѕР№РґРµС‚ РІ СЃРµРїС‚РµС‚
             int b = 0x80;
             int mask = 0x01;
             do
@@ -1403,7 +1403,7 @@ int PackPVS(uint8_t* out, uint8_t* in, int len)
             } while (--N);
             while (mask != 0x80)
             {
-                //Заполняем остаток септета
+                //Р—Р°РїРѕР»РЅСЏРµРј РѕСЃС‚Р°С‚РѕРє СЃРµРїС‚РµС‚Р°
                 v = *in++;
                 len--;
                 //printf("%d", v);
@@ -1430,7 +1430,7 @@ double RMTX[9];
 
 void PrepareRotMatrix(double YAW, double PITCH, double ROLL)
 {
-    //Уже суммарный вариант, но оси не те
+    //РЈР¶Рµ СЃСѓРјРјР°СЂРЅС‹Р№ РІР°СЂРёР°РЅС‚, РЅРѕ РѕСЃРё РЅРµ С‚Рµ
     double Sx, Sy, Sz, Cx, Cy, Cz;
     Sx = sin(FM_PI * 2.0f * PITCH);
     Cx = cos(FM_PI * 2.0f * PITCH);
@@ -1479,7 +1479,7 @@ void RenderFace(RVERTEX* v, int color)
             tv = bv;
         }
     } while ((bv = bv->next) != NULL);
-    //Теперь vt указывают на самую верхнюю грань
+    //РўРµРїРµСЂСЊ vt СѓРєР°Р·С‹РІР°СЋС‚ РЅР° СЃР°РјСѓСЋ РІРµСЂС…РЅСЋСЋ РіСЂР°РЅСЊ
     v->prev->next = v;
     double ty;
     double by;
@@ -1489,7 +1489,7 @@ void RenderFace(RVERTEX* v, int color)
     int X;
     X = (int)floor(xmin);
     bv = tv;
-    //Предзагрузка
+    //РџСЂРµРґР·Р°РіСЂСѓР·РєР°
     double tx, bx;
     tx = xmin;
     bx = xmin;
@@ -1497,7 +1497,7 @@ void RenderFace(RVERTEX* v, int color)
     x = floor(xmin);
     xmax = floor(xmax);
     ty = tv->sy;
-    by = bv->sy; //Загрузим на всякий случай
+    by = bv->sy; //Р—Р°РіСЂСѓР·РёРј РЅР° РІСЃСЏРєРёР№ СЃР»СѓС‡Р°Р№
     tdy = 0;
     bdy = 0;
     do
@@ -1511,7 +1511,7 @@ void RenderFace(RVERTEX* v, int color)
             do
             {
                 w = tx; ty = tv->sy;
-                if (tx >= xmax) break; //Никуда дальше не идем, если дошли до края
+                if (tx >= xmax) break; //РќРёРєСѓРґР° РґР°Р»СЊС€Рµ РЅРµ РёРґРµРј, РµСЃР»Рё РґРѕС€Р»Рё РґРѕ РєСЂР°СЏ
                 tv = tv->prev;
                 tx = tv->sx;
             } while (tx < x);
@@ -1568,7 +1568,7 @@ void RenderFace(RVERTEX* v, int color)
     } while (x <= xmax);
 }
 
-//Буфера для обрезания
+//Р‘СѓС„РµСЂР° РґР»СЏ РѕР±СЂРµР·Р°РЅРёСЏ
 #define MAX_VERTEXES (128)
 static RVERTEX vertexes[MAX_VERTEXES];
 
@@ -1603,28 +1603,28 @@ void ComputeSection(double t1, double t2, RVERTEX* vd, RVERTEX* vs1, RVERTEX* vs
         }
     }
     else
-        t1 = 1.0; //Хотя это и не ожидаемое поведение, но еще возможны ошибки вычисления
+        t1 = 1.0; //РҐРѕС‚СЏ СЌС‚Рѕ Рё РЅРµ РѕР¶РёРґР°РµРјРѕРµ РїРѕРІРµРґРµРЅРёРµ, РЅРѕ РµС‰Рµ РІРѕР·РјРѕР¶РЅС‹ РѕС€РёР±РєРё РІС‹С‡РёСЃР»РµРЅРёСЏ
     vd->x = vs1->x + (vs2->x - vs1->x) * t1;
     vd->y = vs1->y + (vs2->y - vs1->y) * t1;
     vd->z = vs1->z + (vs2->z - vs1->z) * t1;
-    vd->flags = SCOORD_NOT_VALID; //Установим флаг невалидности sx/sy
+    vd->flags = SCOORD_NOT_VALID; //РЈСЃС‚Р°РЅРѕРІРёРј С„Р»Р°Рі РЅРµРІР°Р»РёРґРЅРѕСЃС‚Рё sx/sy
 }
 
 #define PROCESS_CLIP_PLANE() do{ \
     if (t1 >= 0 && t2 >= 0) \
     { \
-        /*Обе точки внутри*/ \
+        /*РћР±Рµ С‚РѕС‡РєРё РІРЅСѓС‚СЂРё*/ \
         ADD_VERTEX(vd,vs2); \
     } \
     else if (t1 >= 0 && t2 < 0) \
     { \
-        /*Вышли*/ \
+        /*Р’С‹С€Р»Рё*/ \
         RVERTEX *newv; newv=vpool++; ComputeSection(t1, t2, newv, vs1, vs2); \
         ADD_VERTEX(vd,newv); \
     } \
     else if (t1 < 0 && t2 >= 0) \
     { \
-        /*Зашли*/ \
+        /*Р—Р°С€Р»Рё*/ \
         RVERTEX *newv; newv=vpool++; ComputeSection(t2, t1, newv, vs2, vs1); \
         ADD_VERTEX(vd,newv); \
         ADD_VERTEX(vd,vs2); \
@@ -1638,8 +1638,8 @@ void ComputeSection(double t1, double t2, RVERTEX* vd, RVERTEX* vs1, RVERTEX* vs
 
 #define MIN_Z_CLIP (0.64)
 
-//Синагога с обрезанием
-//Все генерится в xvertexes1
+//РЎРёРЅР°РіРѕРіР° СЃ РѕР±СЂРµР·Р°РЅРёРµРј
+//Р’СЃРµ РіРµРЅРµСЂРёС‚СЃСЏ РІ xvertexes1
 RVERTEX* ClipFace(RVERTEX* vs2, RVERTEX* vpool)
 {
     if (!vs2 || !vs2->next || !vs2->next->next) return NULL;
@@ -1715,7 +1715,7 @@ void RenderScene3(FACE* face, RVERTEX* vroot, RVERTEX* vpool)
 #if 1
     if (face->flags & SCOORD_NOT_VALID)
     {
-        //Там настолько пиздец, что надо в синагогу, обрезать все
+        //РўР°Рј РЅР°СЃС‚РѕР»СЊРєРѕ РїРёР·РґРµС†, С‡С‚Рѕ РЅР°РґРѕ РІ СЃРёРЅР°РіРѕРіСѓ, РѕР±СЂРµР·Р°С‚СЊ РІСЃРµ
         vroot = ClipFace(vroot, vpool);
         if (!vroot) return;
         //Compute sx,sy,iz
@@ -1741,7 +1741,7 @@ void RenderScene3(FACE* face, RVERTEX* vroot, RVERTEX* vpool)
     v = vroot;
     double area;
     area = 0;
-    //На самом деле в реальной жизни мы заменим сдвиг на 8 простым взятием одного байта
+    //РќР° СЃР°РјРѕРј РґРµР»Рµ РІ СЂРµР°Р»СЊРЅРѕР№ Р¶РёР·РЅРё РјС‹ Р·Р°РјРµРЅРёРј СЃРґРІРёРі РЅР° 8 РїСЂРѕСЃС‚С‹Рј РІР·СЏС‚РёРµРј РѕРґРЅРѕРіРѕ Р±Р°Р№С‚Р°
     x1 = v->prev->sx;// >> 8;
     y1 = v->prev->sy;// >> 8;
     do
@@ -1800,7 +1800,7 @@ void RenderScene2(FACE* face, VEC3 *pos)
         {
         case 3:
         default:
-            //Преобразуем в список RVERTEX
+            //РџСЂРµРѕР±СЂР°Р·СѓРµРј РІ СЃРїРёСЃРѕРє RVERTEX
             vpool = vertexes;
             vroot = NULL;
             for (tv = face->v; tv; tv = tv->next)
@@ -1872,7 +1872,7 @@ void TriangulateList(void)
     FACE* fnext;
     FACE* face;
     face = flist;
-    //Проворачиваем все вершины
+    //РџСЂРѕРІРѕСЂР°С‡РёРІР°РµРј РІСЃРµ РІРµСЂС€РёРЅС‹
     for (; face; face = fnext)
     {
         fnext = face->next;
@@ -1929,20 +1929,20 @@ void RenderScene(VEC3* pos)
     FACE* fnext;
     FACE* face;
     face = triangled_list;// flist;
-    //Проворачиваем все вершины
+    //РџСЂРѕРІРѕСЂР°С‡РёРІР°РµРј РІСЃРµ РІРµСЂС€РёРЅС‹
     for (; face; face = fnext)
     {
         fnext = face->next_tri;
         double X, Y, Z, x, y, z;
         face->flags = 0;
-        //Грань пока подходит, пробуем обновить все вершины
+        //Р“СЂР°РЅСЊ РїРѕРєР° РїРѕРґС…РѕРґРёС‚, РїСЂРѕР±СѓРµРј РѕР±РЅРѕРІРёС‚СЊ РІСЃРµ РІРµСЂС€РёРЅС‹
         double max_z;
         max_z = 0;
         for (VERTEX* v = face->v; v; v=v->next)
         {
             int f;
             f = 0;
-            //Расчет новых координат из-за поворотов и движения
+            //Р Р°СЃС‡РµС‚ РЅРѕРІС‹С… РєРѕРѕСЂРґРёРЅР°С‚ РёР·-Р·Р° РїРѕРІРѕСЂРѕС‚РѕРІ Рё РґРІРёР¶РµРЅРёСЏ
             X = v->X - (*pos)[0];
             Y = v->Y - (*pos)[1];
             Z = v->Z - (*pos)[2];
@@ -1955,8 +1955,8 @@ void RenderScene(VEC3* pos)
             if (z > max_z) max_z = z;
             if (z < MIN_Z8)
             {
-                z = 0; //Чтобы проверка по пирамиде выдала нужные результаты (-max,0,+max)
-                f = SCOORD_NOT_VALID; //Точно ошибка экранных координат
+                z = 0; //Р§С‚РѕР±С‹ РїСЂРѕРІРµСЂРєР° РїРѕ РїРёСЂР°РјРёРґРµ РІС‹РґР°Р»Р° РЅСѓР¶РЅС‹Рµ СЂРµР·СѓР»СЊС‚Р°С‚С‹ (-max,0,+max)
+                f = SCOORD_NOT_VALID; //РўРѕС‡РЅРѕ РѕС€РёР±РєР° СЌРєСЂР°РЅРЅС‹С… РєРѕРѕСЂРґРёРЅР°С‚
             }
             else
             {
@@ -1980,14 +1980,14 @@ void RenderScene(VEC3* pos)
             list = face;
         }
     }
-    //Все вершины провернуты, сортируем
+    //Р’СЃРµ РІРµСЂС€РёРЅС‹ РїСЂРѕРІРµСЂРЅСѓС‚С‹, СЃРѕСЂС‚РёСЂСѓРµРј
     FACE* q1[256];
     FACE* q2[256];
     FACE** qf;
     face = list;
     memset(q1, 0, sizeof(q1));
     memset(q2, 0, sizeof(q2));
-    //Первый этап: расчет среднего и заполнение букета
+    //РџРµСЂРІС‹Р№ СЌС‚Р°Рї: СЂР°СЃС‡РµС‚ СЃСЂРµРґРЅРµРіРѕ Рё Р·Р°РїРѕР»РЅРµРЅРёРµ Р±СѓРєРµС‚Р°
     for (; face; face = fnext)
     {
         fnext = face->next2;
@@ -2025,7 +2025,7 @@ void RenderScene(VEC3* pos)
             } while ((face = fnext) != NULL);
         }
     }
-    //Все, теперь можно просто собрать всех и вся.
+    //Р’СЃРµ, С‚РµРїРµСЂСЊ РјРѕР¶РЅРѕ РїСЂРѕСЃС‚Рѕ СЃРѕР±СЂР°С‚СЊ РІСЃРµС… Рё РІСЃСЏ.
     for (int i = 255; i >= 0; i--)
     {
         RenderScene2(q2[i], pos);
@@ -2061,7 +2061,7 @@ void DumpBMP(void)
 
 int SceneOutToPVS(void)
 {
-    //Чекаем статистику
+    //Р§РµРєР°РµРј СЃС‚Р°С‚РёСЃС‚РёРєСѓ
     static int counts[65536];
     memset(counts, 0, sizeof(counts));
     for (int y = 0; y < 256; y++)
@@ -2192,16 +2192,16 @@ void DoPVS(KDTREE_NODE* root, int xa, int ya, int za, int xb, int yb, int zb, in
         if (index > pvs_top_index) pvs_top_index = index;
         memset(pvs_bitmap, 0, sizeof(pvs_bitmap));
         //if (root->axis == 0xFF)
-        //    pvs_bitmap[root->next_index] = 1; //Обязательно включаем в список текущий лист
+        //    pvs_bitmap[root->next_index] = 1; //РћР±СЏР·Р°С‚РµР»СЊРЅРѕ РІРєР»СЋС‡Р°РµРј РІ СЃРїРёСЃРѕРє С‚РµРєСѓС‰РёР№ Р»РёСЃС‚
         memset(pvs_banned, 0, sizeof(pvs_banned));
         VEC3 pos;
-        //Центр
+        //Р¦РµРЅС‚СЂ
         pos[0] = ((double)xb + (double)xa) * (MIN_BOX_SIZE / 2.0);
         pos[1] = ((double)yb + (double)ya) * (MIN_BOX_SIZE / 2.0);
         pos[2] = ((double)zb + (double)za) * (MIN_BOX_SIZE / 2.0);
         DoPVSpos(&pos);
 
-        //Грани по X
+        //Р“СЂР°РЅРё РїРѕ X
         pos[0] = ((double)xa) * MIN_BOX_SIZE;
         pos[1] = ((double)yb + (double)ya) * (MIN_BOX_SIZE / 2.0);
         pos[2] = ((double)zb + (double)za) * (MIN_BOX_SIZE / 2.0);
@@ -2211,7 +2211,7 @@ void DoPVS(KDTREE_NODE* root, int xa, int ya, int za, int xb, int yb, int zb, in
         pos[2] = ((double)zb + (double)za) * (MIN_BOX_SIZE / 2.0);
         DoPVSpos(&pos);
 
-        //Грани по Y
+        //Р“СЂР°РЅРё РїРѕ Y
         pos[0] = ((double)xb + (double)xa) * (MIN_BOX_SIZE / 2.0);
         pos[1] = ((double)ya) * MIN_BOX_SIZE;
         pos[2] = ((double)zb + (double)za) * (MIN_BOX_SIZE / 2.0);
@@ -2221,7 +2221,7 @@ void DoPVS(KDTREE_NODE* root, int xa, int ya, int za, int xb, int yb, int zb, in
         pos[2] = ((double)zb + (double)za) * (MIN_BOX_SIZE / 2.0);
         DoPVSpos(&pos);
 
-        //Грани по Z
+        //Р“СЂР°РЅРё РїРѕ Z
         pos[0] = ((double)xb + (double)xa) * (MIN_BOX_SIZE / 2.0);
         pos[1] = ((double)yb + (double)ya) * (MIN_BOX_SIZE / 2.0);
         pos[2] = ((double)za) * MIN_BOX_SIZE;
@@ -2231,7 +2231,7 @@ void DoPVS(KDTREE_NODE* root, int xa, int ya, int za, int xb, int yb, int zb, in
         pos[2] = ((double)zb) * MIN_BOX_SIZE;
         DoPVSpos(&pos);
 
-        //Вершины
+        //Р’РµСЂС€РёРЅС‹
         pos[0] = ((double)xa) * MIN_BOX_SIZE;
         pos[1] = ((double)ya) * MIN_BOX_SIZE;
         pos[2] = ((double)za) * MIN_BOX_SIZE;
@@ -2387,13 +2387,13 @@ FACEQ* SplitCollision(FACEQ* froot, double split, int reverse, int axis)
         case 2:
             if (f->parent_face)
             {
-                //Отбрасываем непригодившееся
+                //РћС‚Р±СЂР°СЃС‹РІР°РµРј РЅРµРїСЂРёРіРѕРґРёРІС€РµРµСЃСЏ
                 DestructFace(f);
                 FreeFACEQ(fq);
             }
             break;
         default:
-            //Нужно разделить на две грани
+            //РќСѓР¶РЅРѕ СЂР°Р·РґРµР»РёС‚СЊ РЅР° РґРІРµ РіСЂР°РЅРё
             {
                 FACE* face_a = AllocFace();
                 for (VERTEX* v2 = f->v; v2; v2 = v2->next)
@@ -2415,7 +2415,7 @@ FACEQ* SplitCollision(FACEQ* froot, double split, int reverse, int axis)
                     }
                     if ((t1 < 0.0 && t2 >= 0.0) || (t1 >= 0.0 && t2 < 0.0))
                     {
-                        //Нужно создать новый вертекс
+                        //РќСѓР¶РЅРѕ СЃРѕР·РґР°С‚СЊ РЅРѕРІС‹Р№ РІРµСЂС‚РµРєСЃ
                         VERTEX* nv;
                         nv = ComputeSectionAndCreateVertex(t1, t2, v1, v2);
                         InsertVertexToFace(face_a, nv);
@@ -2426,13 +2426,13 @@ FACEQ* SplitCollision(FACEQ* froot, double split, int reverse, int axis)
                         InsertVertexToFace(face_a, nv);
                     }
                 }
-                //Все, мы разделились на две грани, запоминаем, кто папа
+                //Р’СЃРµ, РјС‹ СЂР°Р·РґРµР»РёР»РёСЃСЊ РЅР° РґРІРµ РіСЂР°РЅРё, Р·Р°РїРѕРјРёРЅР°РµРј, РєС‚Рѕ РїР°РїР°
                 if (f->parent_face)
                 {
                     face_a->parent_face = f->parent_face;
-                    //У нас есть родитель, грань, которую мы только что разбили можно убить
+                    //РЈ РЅР°СЃ РµСЃС‚СЊ СЂРѕРґРёС‚РµР»СЊ, РіСЂР°РЅСЊ, РєРѕС‚РѕСЂСѓСЋ РјС‹ С‚РѕР»СЊРєРѕ С‡С‚Рѕ СЂР°Р·Р±РёР»Рё РјРѕР¶РЅРѕ СѓР±РёС‚СЊ
                     DestructFace(f);
-                    //И элемент списка с ней тоже
+                    //Р СЌР»РµРјРµРЅС‚ СЃРїРёСЃРєР° СЃ РЅРµР№ С‚РѕР¶Рµ
                     FreeFACEQ(fq);
                 }
                 else
@@ -2493,13 +2493,13 @@ void DoCollision(KDTREE_NODE* root, int xa, int ya, int za, int xb, int yb, int 
         printf("Leaf %05d (size %d %d %d) F=%d: ", index, xb - xa, yb - ya, zb - za, root->axis-0xFE);
         FACEQ* fq = base_mesh;
 #define MIN_D_WALK (1.6)
-        //Грани по X
+        //Р“СЂР°РЅРё РїРѕ X
         fq = SplitCollision(fq, ((double)xa) * MIN_BOX_SIZE - MIN_D_WALK, 1, 0);
         fq = SplitCollision(fq, ((double)xb) * MIN_BOX_SIZE + MIN_D_WALK, 0, 0);
-        //Грани по Y
+        //Р“СЂР°РЅРё РїРѕ Y
         fq = SplitCollision(fq, ((double)ya) * MIN_BOX_SIZE - MIN_D_WALK, 1, 1);
         fq = SplitCollision(fq, ((double)yb) * MIN_BOX_SIZE + MIN_D_WALK, 0, 1);
-        //Грани по Z
+        //Р“СЂР°РЅРё РїРѕ Z
         fq = SplitCollision(fq, ((double)za) * MIN_BOX_SIZE - MIN_D_WALK, 1, 2);
         fq = SplitCollision(fq, ((double)zb) * MIN_BOX_SIZE + MIN_D_WALK, 0, 2);
         if (fq)
@@ -2542,7 +2542,7 @@ void ComputeCollisionsList(void)
     memset(collision_index, 0, 4 * kd_tree_top);
     collision_list_file = xfopen("clist.bin","wb");
     uint32_t zero = 0;
-    fwrite(&zero, 1, 4, collision_list_file); //Все со смещением 0 будут иметь пустой список
+    fwrite(&zero, 1, 4, collision_list_file); //Р’СЃРµ СЃРѕ СЃРјРµС‰РµРЅРёРµРј 0 Р±СѓРґСѓС‚ РёРјРµС‚СЊ РїСѓСЃС‚РѕР№ СЃРїРёСЃРѕРє
     DoCollision(kd_tree,
         KDT_IBoxA[0], KDT_IBoxA[1], KDT_IBoxA[2],
         KDT_IBoxB[0], KDT_IBoxB[1], KDT_IBoxB[2],
@@ -2603,7 +2603,7 @@ int main()
     TriangulateList();
 #ifdef SINGLE_PVS
     VEC3 pos;
-    //Центр
+    //Р¦РµРЅС‚СЂ
 #if 1
     pos[0] = 0;
     pos[1] = 0;

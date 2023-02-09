@@ -47,7 +47,7 @@ void InitRender3D(void)
         InvAndJump_table[in].jumper = ((-1 - (in & 15)) << 16) + s16_count;
         if ((in & 15) == 15) s16_count++;
     }
-    //Èíèöèàëèçèðóåì ïóë
+    //Ð˜Ð½Ð¸Ñ†Ð¸Ð°Ð»Ð¸Ð·Ð¸Ñ€ÑƒÐµÐ¼ Ð¿ÑƒÐ»
     for (int i = 0; i < R_DATA_TOTAL_SZ; i++)
     {
         RDataPool[i] = RDataBuffer + i;
@@ -147,7 +147,7 @@ uint32_t *RenderSlices(uint32_t* Task)
         T0 = T + bp[tb++];
         T1 = T + bp[tb];
 
-        v = j & 0xFFFF; //Ñ÷åò÷èê
+        v = j & 0xFFFF; //Ð¡Ñ‡ÐµÑ‚Ñ‡Ð¸Ðº
         j >>= 16;
 
         if (((size_t)D ^ j) & 1)
@@ -189,7 +189,7 @@ uint32_t* TrapezoidsToSlices(uint32_t* in)
     {
         return TrapezoidsBuffer;
     }
-    if (in == TrapezoidsBuffer) return in; //Ïóñòî
+    if (in == TrapezoidsBuffer) return in; //ÐŸÑƒÑÑ‚Ð¾
     *in++ = 0x80000000; //Finish
     in = TrapezoidsBuffer;
     uint32_t* wp = Slices_wp;
@@ -335,13 +335,13 @@ R_DATA** tmap_prepare(RFACE* f, R_DATA** pool)
     {
         xmax = 0;
         xmin = INT32_MAX;
-        *--pool = (R_DATA*)wf; //Âîçâðàùàåì â ïóë ñàìó ãðàíü
+        *--pool = (R_DATA*)wf; //Ð’Ð¾Ð·Ð²Ñ€Ð°Ñ‰Ð°ÐµÐ¼ Ð² Ð¿ÑƒÐ» ÑÐ°Ð¼Ñƒ Ð³Ñ€Ð°Ð½ÑŒ
         v = wf->vertex;
         RVERTEX* vlast = v->prev;
         do
         {
-            *--pool = (R_DATA*)v; //Âîçâðàùàåì â ïóë âåðòåêñ
-            //Àïäåéòèì âñå íàøè óêàçàòåëè íàçàä
+            *--pool = (R_DATA*)v; //Ð’Ð¾Ð·Ð²Ñ€Ð°Ñ‰Ð°ÐµÐ¼ Ð² Ð¿ÑƒÐ» Ð²ÐµÑ€Ñ‚ÐµÐºÑ
+            //ÐÐ¿Ð´ÐµÐ¹Ñ‚Ð¸Ð¼ Ð²ÑÐµ Ð½Ð°ÑˆÐ¸ ÑƒÐºÐ°Ð·Ð°Ñ‚ÐµÐ»Ð¸ Ð½Ð°Ð·Ð°Ð´
             v->prev = vlast;
             vlast = v;
             if (v->flags & SCOORD_NOT_VALID)
@@ -407,12 +407,12 @@ R_DATA** tmap_prepare(RFACE* f, R_DATA** pool)
         }
         else
         {
-            b->next = wf->vertex; //Çàöèêëèâàåì ñïèñêè
+            b->next = wf->vertex; //Ð—Ð°Ñ†Ð¸ÐºÐ»Ð¸Ð²Ð°ÐµÐ¼ ÑÐ¿Ð¸ÑÐºÐ¸
         }
         wf->vertex = t;
         wf->xmax = xmax;
     } while ((wf = wf->next) != NULL);
-    //Ïåðâàÿ ÷àñòü çàêîí÷åíà, òåïåðü ìû ñîçäàåì òðàïåöèèè
+    //ÐŸÐµÑ€Ð²Ð°Ñ Ñ‡Ð°ÑÑ‚ÑŒ Ð·Ð°ÐºÐ¾Ð½Ñ‡ÐµÐ½Ð°, Ñ‚ÐµÐ¿ÐµÑ€ÑŒ Ð¼Ñ‹ ÑÐ¾Ð·Ð´Ð°ÐµÐ¼ Ñ‚Ñ€Ð°Ð¿ÐµÑ†Ð¸Ð¸Ð¸
     if (display_wires) return pool;
     uint32_t* wp = Trapezoids_wp;
     do
@@ -539,7 +539,7 @@ void FinishRenderSlices(void)
     RDBG("    TrapezoidsToSlices (cleanup)\n");
     Trapezoids_wp = TrapezoidsToSlices(Trapezoids_wp);
     RDBG("    RenderSlices (cleanup)\n");
-    Slices_wp = RenderSlices(Slices_wp); //Îòîðåíäåðèì âñå ñëàéñû
+    Slices_wp = RenderSlices(Slices_wp); //ÐžÑ‚Ð¾Ñ€ÐµÐ½Ð´ÐµÑ€Ð¸Ð¼ Ð²ÑÐµ ÑÐ»Ð°Ð¹ÑÑ‹
     //h_dith_rand = rand();
     //l_dith_rand = rand();
     dith_rand = (dith_rand + 1) & 15;
@@ -560,13 +560,13 @@ R_DATA** fmap_prepare(RFACE* f, R_DATA **pool)
     {
         xmax = 0;
         xmin = INT32_MAX;
-        *--pool = (R_DATA*)wf; //Âîçâðàùàåì â ïóë ñàìó ãðàíü
+        *--pool = (R_DATA*)wf; //Ð’Ð¾Ð·Ð²Ñ€Ð°Ñ‰Ð°ÐµÐ¼ Ð² Ð¿ÑƒÐ» ÑÐ°Ð¼Ñƒ Ð³Ñ€Ð°Ð½ÑŒ
         v = wf->vertex;
         RVERTEX* vlast = v->prev;
         do
         {
-            *--pool = (R_DATA*)v; //Âîçâðàùàåì â ïóë âåðòåêñ
-            //Àïäåéòèì âñå íàøè óêàçàòåëè íàçàä
+            *--pool = (R_DATA*)v; //Ð’Ð¾Ð·Ð²Ñ€Ð°Ñ‰Ð°ÐµÐ¼ Ð² Ð¿ÑƒÐ» Ð²ÐµÑ€Ñ‚ÐµÐºÑ
+            //ÐÐ¿Ð´ÐµÐ¹Ñ‚Ð¸Ð¼ Ð²ÑÐµ Ð½Ð°ÑˆÐ¸ ÑƒÐºÐ°Ð·Ð°Ñ‚ÐµÐ»Ð¸ Ð½Ð°Ð·Ð°Ð´
             v->prev = vlast;
             vlast = v;
             if (v->flags & SCOORD_NOT_VALID)
@@ -626,7 +626,7 @@ R_DATA** fmap_prepare(RFACE* f, R_DATA **pool)
             v = v->next;
         } 
         while (v);
-        b->next = wf->vertex; //Çàöèêëèâàåì ñïèñêè
+        b->next = wf->vertex; //Ð—Ð°Ñ†Ð¸ÐºÐ»Ð¸Ð²Ð°ÐµÐ¼ ÑÐ¿Ð¸ÑÐºÐ¸
         wf->vertex = t;
         wf->xmax = xmax;
     } while ((wf = wf->next) != NULL);

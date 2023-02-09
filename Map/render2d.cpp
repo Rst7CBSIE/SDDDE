@@ -42,7 +42,7 @@ static void Plot(FIXP32 x, FIXP32 y, uint16_t color)
         ChunkScreenR[y + x * 128] = color & 0xFF;
 }
 
-//Рисуем простую линию (на входе 24.8 уже в экранных координатах)
+//Р РёСЃСѓРµРј РїСЂРѕСЃС‚СѓСЋ Р»РёРЅРёСЋ (РЅР° РІС…РѕРґРµ 24.8 СѓР¶Рµ РІ СЌРєСЂР°РЅРЅС‹С… РєРѕРѕСЂРґРёРЅР°С‚Р°С…)
 void DrawLine(FIXP32 x1, FIXP32 y1, FIXP32 x2, FIXP32 y2, uint16_t color)
 {
     int dx,dy;

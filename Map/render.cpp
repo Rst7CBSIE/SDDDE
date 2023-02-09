@@ -31,7 +31,7 @@ void InitInv16tab(void)
 
 //#define DEFFERED_RENDER
 
-//Буфера для обрезания
+//Р‘СѓС„РµСЂР° РґР»СЏ РѕР±СЂРµР·Р°РЅРёСЏ
 #define MAX_VERTEXES (128)
 static RVERTEX vertexes[MAX_VERTEXES];
 
@@ -51,13 +51,13 @@ do \
 }while(0)
 
 
-TFACE *Qfaces; //Стек готовых к отрисовке граней
+TFACE *Qfaces; //РЎС‚РµРє РіРѕС‚РѕРІС‹С… Рє РѕС‚СЂРёСЃРѕРІРєРµ РіСЂР°РЅРµР№
 
 uint32_t FrameCounter;
 
 void InitLogExpTables(void)
 {
-    //Инициализируем таблицу логарифмов
+    //РРЅРёС†РёР°Р»РёР·РёСЂСѓРµРј С‚Р°Р±Р»РёС†Сѓ Р»РѕРіР°СЂРёС„РјРѕРІ
     for (int i = 1; i < 0x4000; i++)
     {
         int m, e;
@@ -71,13 +71,13 @@ void InitLogExpTables(void)
         m = (int)(2048.0 * log2((double)m / 32768.0) + 0.5);
         if (m > 2047)
             m = 2047;
-        m &= 0x7FF; //Младший бит у нас будет знак
+        m &= 0x7FF; //РњР»Р°РґС€РёР№ Р±РёС‚ Сѓ РЅР°СЃ Р±СѓРґРµС‚ Р·РЅР°Рє
         m <<= 1;
         LOGtab[i] = (e << 12) | m;
         LOGtab[-i] = (e << 12) | m | 1;
     }
-    LOGtab[1] |= 2; //Подправим младший бит у 1, чтобы отличаться от нуля
-    //Дампим таблицу логарифмов
+    LOGtab[1] |= 2; //РџРѕРґРїСЂР°РІРёРј РјР»Р°РґС€РёР№ Р±РёС‚ Сѓ 1, С‡С‚РѕР±С‹ РѕС‚Р»РёС‡Р°С‚СЊСЃСЏ РѕС‚ РЅСѓР»СЏ
+    //Р”Р°РјРїРёРј С‚Р°Р±Р»РёС†Сѓ Р»РѕРіР°СЂРёС„РјРѕРІ
     FILE* f;
     f = fopen("logtab.txt", "wt");
     for (int i = 0; i < 0x8000; i++)
@@ -86,7 +86,7 @@ void InitLogExpTables(void)
         if ((i & 15) == 15) fprintf(f, "\n");
     }
     fclose(f);
-    //Инициализируем таблицу экспонент
+    //РРЅРёС†РёР°Р»РёР·РёСЂСѓРµРј С‚Р°Р±Р»РёС†Сѓ СЌРєСЃРїРѕРЅРµРЅС‚
     for (int i = 0; i < 0x10000; i += 2)
     {
         int m, e;
@@ -94,7 +94,7 @@ void InitLogExpTables(void)
         r = i;
         if (r >= 0x1000)
         {
-            //Это отрицательный порядок, надо скорректировать
+            //Р­С‚Рѕ РѕС‚СЂРёС†Р°С‚РµР»СЊРЅС‹Р№ РїРѕСЂСЏРґРѕРє, РЅР°РґРѕ СЃРєРѕСЂСЂРµРєС‚РёСЂРѕРІР°С‚СЊ
             r -= 0x10000;
         }
         m = ((r >> 1) & 0x7FF);
@@ -124,9 +124,9 @@ void InitLogExpTables(void)
             EXPtab[i + 1] = v2 & 0xFFFF;
         }
     }
-    EXPtab[0] = XDISP_FP; //Если у нас 0 - то центр экрана
-    EXPtab[1] = SCR_L8;// -1; //Патч вычислительной ошибки
-    //Для того, чтобы удобно было делать обрезание
+    EXPtab[0] = XDISP_FP; //Р•СЃР»Рё Сѓ РЅР°СЃ 0 - С‚Рѕ С†РµРЅС‚СЂ СЌРєСЂР°РЅР°
+    EXPtab[1] = SCR_L8;// -1; //РџР°С‚С‡ РІС‹С‡РёСЃР»РёС‚РµР»СЊРЅРѕР№ РѕС€РёР±РєРё
+    //Р”Р»СЏ С‚РѕРіРѕ, С‡С‚РѕР±С‹ СѓРґРѕР±РЅРѕ Р±С‹Р»Рѕ РґРµР»Р°С‚СЊ РѕР±СЂРµР·Р°РЅРёРµ
     EXPtab[0xFFFE] = SCR_R8;
     EXPtab[0xFFFF] = SCR_L8;// -1;
     f = fopen("exptab.txt", "wt");
@@ -243,22 +243,25 @@ R_DATA** AddVertexesByX(RFACE** fout, RFACE* f, R_DATA** pool)
             stack = NULL;
             FIXP16 save_t2;
             FIXP16 save_t1;
-            save_t1 = (vs1->x + vs1->z) * 4;
-            save_t2 = (vs2->x + vs2->z) * 4;
-            int count = 3 + 1 + 3;
-            do
+            FIXP16 z1, z2;
+            z1 = vs1->z;
+            z2 = vs2->z;
+            save_t1 = (vs1->x + z1) * 4;
+            save_t2 = (vs2->x + z2) * 4;
+            for(;;)
             {
                 save_t1 -= vs1->z;
                 save_t2 -= vs2->z;
                 t2 = save_t2;
                 t1 = save_t1;
-                if ((t1 ^ t2) >= 0) continue; //Нет сечения
-                //Знак поменялся, нам надо посчитать точку
+                if (t1 < 0 && t2 < 0) break;
+                if ((t1 ^ t2) >= 0) continue; //РќРµС‚ СЃРµС‡РµРЅРёСЏ
+                //Р—РЅР°Рє РїРѕРјРµРЅСЏР»СЃСЏ, РЅР°Рј РЅР°РґРѕ РїРѕСЃС‡РёС‚Р°С‚СЊ С‚РѕС‡РєСѓ
                 vd = &(*pool++)->v;
-                vd->flags = SCOORD_NOT_VALID; //Установим флаг невалидности sx/sy
+                vd->flags = SCOORD_NOT_VALID; //РЈСЃС‚Р°РЅРѕРІРёРј С„Р»Р°Рі РЅРµРІР°Р»РёРґРЅРѕСЃС‚Рё sx/sy
                 if (save_t2 >= 0)
                 {
-                    //Меняем
+                    //РњРµРЅСЏРµРј
                     FIXP16 t; t = t1; t1 = t2; t2 = t;
                     RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
                 }
@@ -282,7 +285,7 @@ R_DATA** AddVertexesByX(RFACE** fout, RFACE* f, R_DATA** pool)
                 } while (--pcount);
                 if (save_t2 >= 0)
                 {
-                    //Меняем назад
+                    //РњРµРЅСЏРµРј РЅР°Р·Р°Рґ
                     RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
                     vlast->next = vd;
                     vlast = vd;
@@ -292,7 +295,7 @@ R_DATA** AddVertexesByX(RFACE** fout, RFACE* f, R_DATA** pool)
                     vd->next = stack;
                     stack = vd;
                 }
-            } while (--count);
+            }
             //Move from stack
             while (stack)
             {
@@ -305,10 +308,10 @@ R_DATA** AddVertexesByX(RFACE** fout, RFACE* f, R_DATA** pool)
             vlast = vs2;
             vs1 = vs2;
         } while ((vs2 = vs2->next) != NULL);
-        //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+        //РЈСЃС‚Р°РЅРѕРІРёРј РїСЂР°РІРёР»СЊРЅС‹Рµ next/prev С‚РѕР»СЊРєРѕ РґР»СЏ РїРµСЂРІРѕРіРѕ Рё РїРѕСЃР»РµРґРЅРµРіРѕ СЌР»РµРјРµРЅС‚Р°, РѕРЅРё РЅР°Рј Р±СѓРґСѓС‚ РЅСѓР¶РЅС‹ РІ СЃРёРЅР°РіРѕРЅРµ
         f->vertex->prev = vlast;
         vlast->next = NULL;
-        //Добавляем грань на выход
+        //Р”РѕР±Р°РІР»СЏРµРј РіСЂР°РЅСЊ РЅР° РІС‹С…РѕРґ
     //L_no_add:
         RDBG("\t\t\tsplitted...\n");
         send_to_render_faces++;
@@ -344,13 +347,13 @@ R_DATA** AddVertexesByY(RFACE** fout, RFACE* f, R_DATA** pool)
             save_t2 -= vs2->z * 2;
             t2 = save_t2;
             t1 = save_t1;
-            if ((t1 ^ t2) >= 0) continue; //Нет сечения
-            //Знак поменялся, нам надо посчитать точку
+            if ((t1 ^ t2) >= 0) continue; //РќРµС‚ СЃРµС‡РµРЅРёСЏ
+            //Р—РЅР°Рє РїРѕРјРµРЅСЏР»СЃСЏ, РЅР°Рј РЅР°РґРѕ РїРѕСЃС‡РёС‚Р°С‚СЊ С‚РѕС‡РєСѓ
             vd = &(*pool++)->v;
-            vd->flags = SCOORD_NOT_VALID; //Установим флаг невалидности sx/sy
+            vd->flags = SCOORD_NOT_VALID; //РЈСЃС‚Р°РЅРѕРІРёРј С„Р»Р°Рі РЅРµРІР°Р»РёРґРЅРѕСЃС‚Рё sx/sy
             if (save_t2 >= 0)
             {
-                //Меняем
+                //РњРµРЅСЏРµРј
                 FIXP16 t; t = t1; t1 = t2; t2 = t;
                 RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
             }
@@ -374,7 +377,7 @@ R_DATA** AddVertexesByY(RFACE** fout, RFACE* f, R_DATA** pool)
             } while (--pcount);
             if (save_t2 >= 0)
             {
-                //Меняем назад
+                //РњРµРЅСЏРµРј РЅР°Р·Р°Рґ
                 RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
                 vlast->next = vd;
                 vlast = vd;
@@ -425,13 +428,13 @@ R_DATA** AddVertexesByY(RFACE** fout, RFACE* f, R_DATA** pool)
             save_t2 = t2;
             if ((t1 ^ t2) < 0)
             {
-                //Знак поменялся, нам надо посчитать точку
+                //Р—РЅР°Рє РїРѕРјРµРЅСЏР»СЃСЏ, РЅР°Рј РЅР°РґРѕ РїРѕСЃС‡РёС‚Р°С‚СЊ С‚РѕС‡РєСѓ
                 RVERTEX* vd;
                 vd = &(*pool++)->v;
-                vd->flags = SCOORD_NOT_VALID | FACE_DIVIDED; //Установим флаг невалидности sx/sy
+                vd->flags = SCOORD_NOT_VALID | FACE_DIVIDED; //РЈСЃС‚Р°РЅРѕРІРёРј С„Р»Р°Рі РЅРµРІР°Р»РёРґРЅРѕСЃС‚Рё sx/sy
                 if (save_t2 >= 0)
                 {
-                    //Меняем
+                    //РњРµРЅСЏРµРј
                     FIXP16 t; t = t1; t1 = t2; t2 = t;
                     RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
                 }
@@ -455,7 +458,7 @@ R_DATA** AddVertexesByY(RFACE** fout, RFACE* f, R_DATA** pool)
                 } while (--pcount);
                 if (save_t2 >= 0)
                 {
-                    //Меняем назад
+                    //РњРµРЅСЏРµРј РЅР°Р·Р°Рґ
                     vs2 = vs1;
                 }
                 vlast->next = vd;
@@ -469,10 +472,10 @@ R_DATA** AddVertexesByY(RFACE** fout, RFACE* f, R_DATA** pool)
         vlast->next = NULL;
     }
 #endif
-    //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+    //РЈСЃС‚Р°РЅРѕРІРёРј РїСЂР°РІРёР»СЊРЅС‹Рµ next/prev С‚РѕР»СЊРєРѕ РґР»СЏ РїРµСЂРІРѕРіРѕ Рё РїРѕСЃР»РµРґРЅРµРіРѕ СЌР»РµРјРµРЅС‚Р°, РѕРЅРё РЅР°Рј Р±СѓРґСѓС‚ РЅСѓР¶РЅС‹ РІ СЃРёРЅР°РіРѕРЅРµ
     f->vertex->prev = vlast;
     vlast->next = NULL;
-    //Добавляем грань на выход
+    //Р”РѕР±Р°РІР»СЏРµРј РіСЂР°РЅСЊ РЅР° РІС‹С…РѕРґ
 //L_no_add:
     send_to_render_faces++;
     (*fout)->next = f;
@@ -495,8 +498,8 @@ R_DATA** SplitFaceByY(RFACE** fout, RFACE* face_a, R_DATA** pool)
         face_b = &(*pool++)->f;
         face_b->T = face_a->T;
         face_b->xmax = face_a->xmax;
-        RVERTEX* vlast_a = (RVERTEX*)face_a; //Последняя вершина грани a
-        RVERTEX* vlast_b = (RVERTEX*)face_b; //Последняя вершина грани b
+        RVERTEX* vlast_a = (RVERTEX*)face_a; //РџРѕСЃР»РµРґРЅСЏСЏ РІРµСЂС€РёРЅР° РіСЂР°РЅРё a
+        RVERTEX* vlast_b = (RVERTEX*)face_b; //РџРѕСЃР»РµРґРЅСЏСЏ РІРµСЂС€РёРЅР° РіСЂР°РЅРё b
         do
         {
             FIXP16 t1, t2;
@@ -515,23 +518,23 @@ R_DATA** SplitFaceByY(RFACE** fout, RFACE* face_a, R_DATA** pool)
             save_t2 = t2;
             if ((t1 ^ t2) < 0)
             {
-                //Знак поменялся, нам надо посчитать точку и добавить ее в обе грани
+                //Р—РЅР°Рє РїРѕРјРµРЅСЏР»СЃСЏ, РЅР°Рј РЅР°РґРѕ РїРѕСЃС‡РёС‚Р°С‚СЊ С‚РѕС‡РєСѓ Рё РґРѕР±Р°РІРёС‚СЊ РµРµ РІ РѕР±Рµ РіСЂР°РЅРё
                 RVERTEX* vd1, * vd2;
                 vd1 = &(*pool++)->v;
                 vd2 = &(*pool++)->v;
                 if (vs1->flags & vs2->flags & FACE_DIVIDED)
                 {
-                    vd1->flags = SCOORD_NOT_VALID | FACE_DIVIDED; //Установим флаг невалидности sx/sy
-                    vd2->flags = SCOORD_NOT_VALID | FACE_DIVIDED; //Установим флаг невалидности sx/sy
+                    vd1->flags = SCOORD_NOT_VALID | FACE_DIVIDED; //РЈСЃС‚Р°РЅРѕРІРёРј С„Р»Р°Рі РЅРµРІР°Р»РёРґРЅРѕСЃС‚Рё sx/sy
+                    vd2->flags = SCOORD_NOT_VALID | FACE_DIVIDED; //РЈСЃС‚Р°РЅРѕРІРёРј С„Р»Р°Рі РЅРµРІР°Р»РёРґРЅРѕСЃС‚Рё sx/sy
                 }
                 else
                 {
-                    vd1->flags = SCOORD_NOT_VALID; //Установим флаг невалидности sx/sy
-                    vd2->flags = SCOORD_NOT_VALID; //Установим флаг невалидности sx/sy
+                    vd1->flags = SCOORD_NOT_VALID; //РЈСЃС‚Р°РЅРѕРІРёРј С„Р»Р°Рі РЅРµРІР°Р»РёРґРЅРѕСЃС‚Рё sx/sy
+                    vd2->flags = SCOORD_NOT_VALID; //РЈСЃС‚Р°РЅРѕРІРёРј С„Р»Р°Рі РЅРµРІР°Р»РёРґРЅРѕСЃС‚Рё sx/sy
                 }
                 if (save_t2 >= 0)
                 {
-                    //Меняем
+                    //РњРµРЅСЏРµРј
                     FIXP16 t; t = t1; t1 = t2; t2 = t;
                     RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
                 }
@@ -559,7 +562,7 @@ R_DATA** SplitFaceByY(RFACE** fout, RFACE* face_a, R_DATA** pool)
                 } while (--pcount);
                 if (save_t2 >= 0)
                 {
-                    //Меняем назад
+                    //РњРµРЅСЏРµРј РЅР°Р·Р°Рґ
                     vs2 = vs1;
                 }
                 vlast_a->next = vd1;
@@ -569,23 +572,23 @@ R_DATA** SplitFaceByY(RFACE** fout, RFACE* face_a, R_DATA** pool)
             }
             if (save_t2 >= 0)
             {
-                //Отправляем в грань a
+                //РћС‚РїСЂР°РІР»СЏРµРј РІ РіСЂР°РЅСЊ a
                 vlast_a->next = vs2;
                 vlast_a = vs2;
             }
             else
             {
-                //Отправляем в грань b
+                //РћС‚РїСЂР°РІР»СЏРµРј РІ РіСЂР°РЅСЊ b
                 vlast_b->next = vs2;
                 vlast_b = vs2;
             }
             vs1 = vs2;
         } while ((vs2 = vs2->next) != NULL);
-        //Все, мы все прошли, теперь тест, не надо ли вернуть пустые грани в пул
+        //Р’СЃРµ, РјС‹ РІСЃРµ РїСЂРѕС€Р»Рё, С‚РµРїРµСЂСЊ С‚РµСЃС‚, РЅРµ РЅР°РґРѕ Р»Рё РІРµСЂРЅСѓС‚СЊ РїСѓСЃС‚С‹Рµ РіСЂР°РЅРё РІ РїСѓР»
         if (vlast_b != (RVERTEX*)face_b)
         {
             vlast_b->next = NULL;
-            //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+            //РЈСЃС‚Р°РЅРѕРІРёРј РїСЂР°РІРёР»СЊРЅС‹Рµ next/prev С‚РѕР»СЊРєРѕ РґР»СЏ РїРµСЂРІРѕРіРѕ Рё РїРѕСЃР»РµРґРЅРµРіРѕ СЌР»РµРјРµРЅС‚Р°, РѕРЅРё РЅР°Рј Р±СѓРґСѓС‚ РЅСѓР¶РЅС‹ РІ СЃРёРЅР°РіРѕРЅРµ
             face_b->vertex->prev = vlast_b;
             //pool = AddVertexesByX(fout, face_b, pool);
             RDBG("\t\t\tsplitted...\n");
@@ -594,23 +597,23 @@ R_DATA** SplitFaceByY(RFACE** fout, RFACE* face_a, R_DATA** pool)
         }
         else
         {
-            //Грань а пуста
-            *--pool = (R_DATA*)face_b; //Возвращаем в пул грань
+            //Р“СЂР°РЅСЊ Р° РїСѓСЃС‚Р°
+            *--pool = (R_DATA*)face_b; //Р’РѕР·РІСЂР°С‰Р°РµРј РІ РїСѓР» РіСЂР°РЅСЊ
         }
         if (vlast_a != (RVERTEX*)face_a)
         {
-            //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+            //РЈСЃС‚Р°РЅРѕРІРёРј РїСЂР°РІРёР»СЊРЅС‹Рµ next/prev С‚РѕР»СЊРєРѕ РґР»СЏ РїРµСЂРІРѕРіРѕ Рё РїРѕСЃР»РµРґРЅРµРіРѕ СЌР»РµРјРµРЅС‚Р°, РѕРЅРё РЅР°Рј Р±СѓРґСѓС‚ РЅСѓР¶РЅС‹ РІ СЃРёРЅР°РіРѕРЅРµ
             vlast_a->next = NULL;
             face_a->vertex->prev = vlast_a;
         }
         else
         {
-            //Грань а пуста, а значит нам больше нечего резать
-            *--pool = (R_DATA*)face_a; //Возвращаем в пул грань
+            //Р“СЂР°РЅСЊ Р° РїСѓСЃС‚Р°, Р° Р·РЅР°С‡РёС‚ РЅР°Рј Р±РѕР»СЊС€Рµ РЅРµС‡РµРіРѕ СЂРµР·Р°С‚СЊ
+            *--pool = (R_DATA*)face_a; //Р’РѕР·РІСЂР°С‰Р°РµРј РІ РїСѓР» РіСЂР°РЅСЊ
             goto L1;
         }
     }
-    //Добавляем остатки грани на выход
+    //Р”РѕР±Р°РІР»СЏРµРј РѕСЃС‚Р°С‚РєРё РіСЂР°РЅРё РЅР° РІС‹С…РѕРґ
     fq->next = face_a;
     fq = face_a;
 L1:
@@ -633,8 +636,8 @@ R_DATA** SplitFaceByZ(RFACE** fout, RFACE* face_a, R_DATA** pool)
     face_b = &(*pool++)->f;
     face_b->T = face_a->T;
     face_b->xmax = face_a->xmax;
-    RVERTEX* vlast_a = (RVERTEX*)face_a; //Последняя вершина грани a
-    RVERTEX* vlast_b = (RVERTEX*)face_b; //Последняя вершина грани b
+    RVERTEX* vlast_a = (RVERTEX*)face_a; //РџРѕСЃР»РµРґРЅСЏСЏ РІРµСЂС€РёРЅР° РіСЂР°РЅРё a
+    RVERTEX* vlast_b = (RVERTEX*)face_b; //РџРѕСЃР»РµРґРЅСЏСЏ РІРµСЂС€РёРЅР° РіСЂР°РЅРё b
     do
     {
         FIXP16 t1, t2;
@@ -646,15 +649,15 @@ R_DATA** SplitFaceByZ(RFACE** fout, RFACE* face_a, R_DATA** pool)
         save_t2 = t2;
         if ((t1 ^ t2) < 0)
         {
-            //Знак поменялся, нам надо посчитать точку и добавить ее в обе грани
+            //Р—РЅР°Рє РїРѕРјРµРЅСЏР»СЃСЏ, РЅР°Рј РЅР°РґРѕ РїРѕСЃС‡РёС‚Р°С‚СЊ С‚РѕС‡РєСѓ Рё РґРѕР±Р°РІРёС‚СЊ РµРµ РІ РѕР±Рµ РіСЂР°РЅРё
             RVERTEX* vd1, * vd2;
             vd1 = &(*pool++)->v;
             vd2 = &(*pool++)->v;
-            vd1->flags = SCOORD_NOT_VALID | FACE_DIVIDED; //Установим флаг невалидности sx/sy
-            vd2->flags = SCOORD_NOT_VALID | FACE_DIVIDED; //Установим флаг невалидности sx/sy
+            vd1->flags = SCOORD_NOT_VALID | FACE_DIVIDED; //РЈСЃС‚Р°РЅРѕРІРёРј С„Р»Р°Рі РЅРµРІР°Р»РёРґРЅРѕСЃС‚Рё sx/sy
+            vd2->flags = SCOORD_NOT_VALID | FACE_DIVIDED; //РЈСЃС‚Р°РЅРѕРІРёРј С„Р»Р°Рі РЅРµРІР°Р»РёРґРЅРѕСЃС‚Рё sx/sy
             if (save_t2 >= 0)
             {
-                //Меняем
+                //РњРµРЅСЏРµРј
                 FIXP16 t; t = t1; t1 = t2; t2 = t;
                 RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
             }
@@ -682,7 +685,7 @@ R_DATA** SplitFaceByZ(RFACE** fout, RFACE* face_a, R_DATA** pool)
             } while (--pcount);
             if (save_t2 >= 0)
             {
-                //Меняем назад
+                //РњРµРЅСЏРµРј РЅР°Р·Р°Рґ
                 vs2 = vs1;
             }
             vlast_a->next = vd1;
@@ -692,22 +695,22 @@ R_DATA** SplitFaceByZ(RFACE** fout, RFACE* face_a, R_DATA** pool)
         }
         if (save_t2 >= 0)
         {
-            //Отправляем в грань b
+            //РћС‚РїСЂР°РІР»СЏРµРј РІ РіСЂР°РЅСЊ b
             vlast_a->next = vs2;
             vlast_a = vs2;
         }
         else
         {
-            //Отправляем в грань b
+            //РћС‚РїСЂР°РІР»СЏРµРј РІ РіСЂР°РЅСЊ b
             vlast_b->next = vs2;
             vlast_b = vs2;
         }
         vs1 = vs2;
     } while ((vs2 = vs2->next) != NULL);
-    //Все, мы все прошли, теперь тест, не надо ли вернуть пустые грани в пул
+    //Р’СЃРµ, РјС‹ РІСЃРµ РїСЂРѕС€Р»Рё, С‚РµРїРµСЂСЊ С‚РµСЃС‚, РЅРµ РЅР°РґРѕ Р»Рё РІРµСЂРЅСѓС‚СЊ РїСѓСЃС‚С‹Рµ РіСЂР°РЅРё РІ РїСѓР»
     if (vlast_a != (RVERTEX*)face_a)
     {
-        //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+        //РЈСЃС‚Р°РЅРѕРІРёРј РїСЂР°РІРёР»СЊРЅС‹Рµ next/prev С‚РѕР»СЊРєРѕ РґР»СЏ РїРµСЂРІРѕРіРѕ Рё РїРѕСЃР»РµРґРЅРµРіРѕ СЌР»РµРјРµРЅС‚Р°, РѕРЅРё РЅР°Рј Р±СѓРґСѓС‚ РЅСѓР¶РЅС‹ РІ СЃРёРЅР°РіРѕРЅРµ
         vlast_a->next = NULL;
         face_a->vertex->prev = vlast_a;
         if (vlast_b != (RVERTEX*)face_b)
@@ -716,7 +719,7 @@ R_DATA** SplitFaceByZ(RFACE** fout, RFACE* face_a, R_DATA** pool)
         }
         else
         {
-            *--pool = (R_DATA*)face_b; //Возвращаем в пул грань
+            *--pool = (R_DATA*)face_b; //Р’РѕР·РІСЂР°С‰Р°РµРј РІ РїСѓР» РіСЂР°РЅСЊ
             RDBG("\t\tNo tesselation...\n");
             send_to_render_faces++;
             (*fout)->next = face_a;
@@ -726,21 +729,21 @@ R_DATA** SplitFaceByZ(RFACE** fout, RFACE* face_a, R_DATA** pool)
     }
     else
     {
-        //Грань а пуста
-        *--pool = (R_DATA*)face_a; //Возвращаем в пул грань
+        //Р“СЂР°РЅСЊ Р° РїСѓСЃС‚Р°
+        *--pool = (R_DATA*)face_a; //Р’РѕР·РІСЂР°С‰Р°РµРј РІ РїСѓР» РіСЂР°РЅСЊ
     }
     if (vlast_b != (RVERTEX*)face_b)
     {
-        //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+        //РЈСЃС‚Р°РЅРѕРІРёРј РїСЂР°РІРёР»СЊРЅС‹Рµ next/prev С‚РѕР»СЊРєРѕ РґР»СЏ РїРµСЂРІРѕРіРѕ Рё РїРѕСЃР»РµРґРЅРµРіРѕ СЌР»РµРјРµРЅС‚Р°, РѕРЅРё РЅР°Рј Р±СѓРґСѓС‚ РЅСѓР¶РЅС‹ РІ СЃРёРЅР°РіРѕРЅРµ
         vlast_b->next = NULL;
         face_b->vertex->prev = vlast_b;
-        //У нас что-то есть в ближней зоне, режем ее по Y
+        //РЈ РЅР°СЃ С‡С‚Рѕ-С‚Рѕ РµСЃС‚СЊ РІ Р±Р»РёР¶РЅРµР№ Р·РѕРЅРµ, СЂРµР¶РµРј РµРµ РїРѕ Y
         pool = SplitFaceByY(fout, face_b, pool);
     }
     else
     {
-        //Грань а пуста
-        *--pool = (R_DATA*)face_b; //Возвращаем в пул грань
+        //Р“СЂР°РЅСЊ Р° РїСѓСЃС‚Р°
+        *--pool = (R_DATA*)face_b; //Р’РѕР·РІСЂР°С‰Р°РµРј РІ РїСѓР» РіСЂР°РЅСЊ
     }
     return pool;
 }
@@ -759,7 +762,7 @@ R_DATA** tmap(RFACE* f, R_DATA** pool)
     {
         if (!(f->xmax & SCOORD_NOT_VALID)) goto L_accept;
         RVERTEX* vlast = f->vertex->prev;
-        //Теперь синагога
+        //РўРµРїРµСЂСЊ СЃРёРЅР°РіРѕРіР°
         int stage = 5;
         do
         {
@@ -769,7 +772,7 @@ R_DATA** tmap(RFACE* f, R_DATA** pool)
             FIXP16 t1, t2;
             vs1 = vlast;
             vs2 = f->vertex;
-            //Сделаем так, чтобы vlast->next указывал на f->vertex
+            //РЎРґРµР»Р°РµРј С‚Р°Рє, С‡С‚РѕР±С‹ vlast->next СѓРєР°Р·С‹РІР°Р» РЅР° f->vertex
             vlast = (RVERTEX*)f;
             do
             {
@@ -806,12 +809,12 @@ R_DATA** tmap(RFACE* f, R_DATA** pool)
                 save_t2 = t2;
                 if ((t1 ^ t2) < 0)
                 {
-                    //Знак поменялся, нам надо посчитать точку
+                    //Р—РЅР°Рє РїРѕРјРµРЅСЏР»СЃСЏ, РЅР°Рј РЅР°РґРѕ РїРѕСЃС‡РёС‚Р°С‚СЊ С‚РѕС‡РєСѓ
                     vd = &(*pool++)->v;
-                    vd->flags = SCOORD_NOT_VALID; //Установим флаг невалидности sx/sy
+                    vd->flags = SCOORD_NOT_VALID; //РЈСЃС‚Р°РЅРѕРІРёРј С„Р»Р°Рі РЅРµРІР°Р»РёРґРЅРѕСЃС‚Рё sx/sy
                     if (save_t2 >= 0)
                     {
-                        //Меняем
+                        //РњРµРЅСЏРµРј
                         FIXP16 t; t = t1; t1 = t2; t2 = t;
                         RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
                     }
@@ -852,7 +855,7 @@ R_DATA** tmap(RFACE* f, R_DATA** pool)
 #endif
                     if (save_t2 >= 0)
                     {
-                        //Меняем назад
+                        //РњРµРЅСЏРµРј РЅР°Р·Р°Рґ
                         vs2 = vs1;
                     }
                     vlast->next = vd;
@@ -865,19 +868,19 @@ R_DATA** tmap(RFACE* f, R_DATA** pool)
                 }
                 else
                 {
-                    *--pool = (R_DATA*)vs2; //Возвращаем в пул вертекс
+                    *--pool = (R_DATA*)vs2; //Р’РѕР·РІСЂР°С‰Р°РµРј РІ РїСѓР» РІРµСЂС‚РµРєСЃ
                 }
                 vs1 = vs2;
             } while ((vs2 = vs2->next) != NULL);
             if (vlast == (RVERTEX*)f)
             {
                 dropped_in_render_faces++;
-                *--pool = (R_DATA*)f; //Возвращаем в пул грань
+                *--pool = (R_DATA*)f; //Р’РѕР·РІСЂР°С‰Р°РµРј РІ РїСѓР» РіСЂР°РЅСЊ
                 goto L_discard;
             }
             vlast->next = NULL;
         } while (--stage);
-        f->vertex->prev = vlast; //Сохраним для потомков
+        f->vertex->prev = vlast; //РЎРѕС…СЂР°РЅРёРј РґР»СЏ РїРѕС‚РѕРјРєРѕРІ
     L_accept:
 #if 0
         if (f->xmax & TSL_FLAG_NEAR)
@@ -918,8 +921,8 @@ R_DATA** tmap(RFACE* f, R_DATA** pool)
         RDBG("Empty after culling!\n");
         return pool;
     }
-    //Сначала прогоним всех до первой тесселяции
-    //Это нужно, чтобы освободить уже аллоцированные вершины/грани
+    //РЎРЅР°С‡Р°Р»Р° РїСЂРѕРіРѕРЅРёРј РІСЃРµС… РґРѕ РїРµСЂРІРѕР№ С‚РµСЃСЃРµР»СЏС†РёРё
+    //Р­С‚Рѕ РЅСѓР¶РЅРѕ, С‡С‚РѕР±С‹ РѕСЃРІРѕР±РѕРґРёС‚СЊ СѓР¶Рµ Р°Р»Р»РѕС†РёСЂРѕРІР°РЅРЅС‹Рµ РІРµСЂС€РёРЅС‹/РіСЂР°РЅРё
     RFACE* fnext;
     fnext = NULL;
     f = section_qhead;
@@ -931,8 +934,8 @@ R_DATA** tmap(RFACE* f, R_DATA** pool)
         fnext = f;
         N++;
     } while ((f = f->next) != NULL);
-    //Теперь f у нас указывает на первую грань для тесселяции
-    //fnext - на последнюю грань, которую можно принудительно отрисовать сразу
+    //РўРµРїРµСЂСЊ f Сѓ РЅР°СЃ СѓРєР°Р·С‹РІР°РµС‚ РЅР° РїРµСЂРІСѓСЋ РіСЂР°РЅСЊ РґР»СЏ С‚РµСЃСЃРµР»СЏС†РёРё
+    //fnext - РЅР° РїРѕСЃР»РµРґРЅСЋСЋ РіСЂР°РЅСЊ, РєРѕС‚РѕСЂСѓСЋ РјРѕР¶РЅРѕ РїСЂРёРЅСѓРґРёС‚РµР»СЊРЅРѕ РѕС‚СЂРёСЃРѕРІР°С‚СЊ СЃСЂР°Р·Сѓ
     if (fnext)
     {
         fnext->next = NULL;
@@ -945,7 +948,7 @@ R_DATA** tmap(RFACE* f, R_DATA** pool)
         RDBG("No faces for tesselation\n");
         return pool;
     }
-    //А в f у нас еще остались вполне вменяемые грани
+    //Рђ РІ f Сѓ РЅР°СЃ РµС‰Рµ РѕСЃС‚Р°Р»РёСЃСЊ РІРїРѕР»РЅРµ РІРјРµРЅСЏРµРјС‹Рµ РіСЂР°РЅРё
     fout = INIT_RFACEQ(section_qhead);
     N = 0;
     do
@@ -1001,7 +1004,7 @@ R_DATA** tmap(RFACE* f, R_DATA** pool)
     return pool;
 }
 
-//Рендерим мир из стека граней
+//Р РµРЅРґРµСЂРёРј РјРёСЂ РёР· СЃС‚РµРєР° РіСЂР°РЅРµР№
 R_DATA** RenderT(TFACE **Q, R_DATA** pool, int Z)
 {
     max_pool_used = 0;
@@ -1019,7 +1022,7 @@ R_DATA** RenderT(TFACE **Q, R_DATA** pool, int Z)
             RFACE* f;
             RVERTEX* vlast;
             RVERTEX* v;
-            //Создаем RFACE
+            //РЎРѕР·РґР°РµРј RFACE
             f = &(*pool++)->f;
             f->T = (((uint32_t)(face->T - Texture) /* + (blend << 17)*/) >> 1) + 0x80000001;
             f->xmax = face->flags;
@@ -1027,7 +1030,7 @@ R_DATA** RenderT(TFACE **Q, R_DATA** pool, int Z)
             {
                 fprintf(dump_file, "f\t%08x\t%d\t%04X\n", (uint32_t)(face->T - Texture), f->xmax, face->avg_color);
             }
-            //Преобразуем в список RVERTEX
+            //РџСЂРµРѕР±СЂР°Р·СѓРµРј РІ СЃРїРёСЃРѕРє RVERTEX
             vlast = (RVERTEX*)f;
             FIXP16 min_z, max_z;
             min_z = 0x7FFF;
@@ -1072,7 +1075,7 @@ R_DATA** RenderT(TFACE **Q, R_DATA** pool, int Z)
                 else
                     f->xmax |= TSL_FLAG_DIVIDE;
             }
-            //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+            //РЈСЃС‚Р°РЅРѕРІРёРј РїСЂР°РІРёР»СЊРЅС‹Рµ next/prev С‚РѕР»СЊРєРѕ РґР»СЏ РїРµСЂРІРѕРіРѕ Рё РїРѕСЃР»РµРґРЅРµРіРѕ СЌР»РµРјРµРЅС‚Р°, РѕРЅРё РЅР°Рј Р±СѓРґСѓС‚ РЅСѓР¶РЅС‹ РІ СЃРёРЅР°РіРѕРЅРµ
             vlast->next = NULL;
             f->vertex->prev = vlast;
             N++;
@@ -1109,7 +1112,7 @@ R_DATA** fmap(RFACE* f, R_DATA** pool)
     {
         if (!(f->xmax & SCOORD_NOT_VALID)) goto L_accept;
         RVERTEX* vlast = f->vertex->prev;
-        //Теперь синагога
+        //РўРµРїРµСЂСЊ СЃРёРЅР°РіРѕРіР°
         FIXP16 t1, t2;
         int stage = 5;
         do
@@ -1119,7 +1122,7 @@ R_DATA** fmap(RFACE* f, R_DATA** pool)
             RVERTEX* vd;
             vs1 = vlast;
             vs2 = f->vertex;
-            //Сделаем так, чтобы vlast->next указывал на f->vertex
+            //РЎРґРµР»Р°РµРј С‚Р°Рє, С‡С‚РѕР±С‹ vlast->next СѓРєР°Р·С‹РІР°Р» РЅР° f->vertex
             vlast = (RVERTEX*)f;
             do
             {
@@ -1156,12 +1159,12 @@ R_DATA** fmap(RFACE* f, R_DATA** pool)
                 save_t2 = t2;
                 if ((t1 ^ t2) < 0)
                 {
-                    //Знак поменялся, нам надо посчитать точку
+                    //Р—РЅР°Рє РїРѕРјРµРЅСЏР»СЃСЏ, РЅР°Рј РЅР°РґРѕ РїРѕСЃС‡РёС‚Р°С‚СЊ С‚РѕС‡РєСѓ
                     vd = &(*pool++)->v;
-                    vd->flags = SCOORD_NOT_VALID; //Установим флаг невалидности sx/sy
+                    vd->flags = SCOORD_NOT_VALID; //РЈСЃС‚Р°РЅРѕРІРёРј С„Р»Р°Рі РЅРµРІР°Р»РёРґРЅРѕСЃС‚Рё sx/sy
                     if (save_t2 >= 0)
                     {
-                        //Меняем
+                        //РњРµРЅСЏРµРј
                         FIXP16 t; t = t1; t1 = t2; t2 = t;
                         RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
                     }
@@ -1202,7 +1205,7 @@ R_DATA** fmap(RFACE* f, R_DATA** pool)
 #endif
                     if (save_t2 >= 0)
                     {
-                        //Меняем назад
+                        //РњРµРЅСЏРµРј РЅР°Р·Р°Рґ
                         vs2 = vs1;
                     }
                     vlast->next = vd;
@@ -1215,14 +1218,14 @@ R_DATA** fmap(RFACE* f, R_DATA** pool)
                 }
                 else
                 {
-                    *--pool = (R_DATA*)vs2; //Возвращаем в пул вертекс
+                    *--pool = (R_DATA*)vs2; //Р’РѕР·РІСЂР°С‰Р°РµРј РІ РїСѓР» РІРµСЂС‚РµРєСЃ
                 }
                 vs1 = vs2;
             } while ((vs2 = vs2->next) != NULL);
             if (vlast==(RVERTEX*)f)
             {
                 dropped_in_render_faces++;
-                *--pool = (R_DATA*)f; //Возвращаем в пул грань
+                *--pool = (R_DATA*)f; //Р’РѕР·РІСЂР°С‰Р°РµРј РІ РїСѓР» РіСЂР°РЅСЊ
                 goto L_discard;
             }
 #if 0
@@ -1234,7 +1237,7 @@ R_DATA** fmap(RFACE* f, R_DATA** pool)
 #endif
             vlast->next = NULL;
         } while (--stage);
-        f->vertex->prev = vlast; //Сохраним для потомков
+        f->vertex->prev = vlast; //РЎРѕС…СЂР°РЅРёРј РґР»СЏ РїРѕС‚РѕРјРєРѕРІ
     L_accept:
         send_to_render_faces++;
         fout->next = f;
@@ -1243,7 +1246,7 @@ R_DATA** fmap(RFACE* f, R_DATA** pool)
     L_discard:
         ;
     } while ((f = f->next) != NULL);
-    //Обработаем пул в любом случае
+    //РћР±СЂР°Р±РѕС‚Р°РµРј РїСѓР» РІ Р»СЋР±РѕРј СЃР»СѓС‡Р°Рµ
     fout->next = NULL;
     if (fculling_qhead)
     {
@@ -1256,7 +1259,7 @@ R_DATA** fmap(RFACE* f, R_DATA** pool)
 
 #define SORTQ_SZ (32)
 
-//Рендерим мир из стека граней (заполненые)
+//Р РµРЅРґРµСЂРёРј РјРёСЂ РёР· СЃС‚РµРєР° РіСЂР°РЅРµР№ (Р·Р°РїРѕР»РЅРµРЅС‹Рµ)
 R_DATA** RenderF(TFACE **Q, R_DATA** pool, int Zmin)
 //R_DATA** DrawWorldQueueF(TFACE* face, R_DATA** pool, uint32_t i)
 {
@@ -1282,15 +1285,15 @@ R_DATA** RenderF(TFACE **Q, R_DATA** pool, int Zmin)
             RFACE* f;
             RVERTEX* vlast;
             RVERTEX* v;
-            //Создаем RFACE
+            //РЎРѕР·РґР°РµРј RFACE
             f = &(*pool++)->f;
             f->T = face->avg_color | (blend << 8);
-            f->xmax = face->flags; //Сохраним флаги в поле xmax
+            f->xmax = face->flags; //РЎРѕС…СЂР°РЅРёРј С„Р»Р°РіРё РІ РїРѕР»Рµ xmax
             if (dump_file)
             {
                 fprintf(dump_file, "f\t%08x\t%d\t%04X\n", 0, f->xmax, face->avg_color);
             }
-            //Преобразуем в список RVERTEX
+            //РџСЂРµРѕР±СЂР°Р·СѓРµРј РІ СЃРїРёСЃРѕРє RVERTEX
             vlast = (RVERTEX*)f;
             for (TVERTEX* tv = face->vertexes; tv->p; tv++)
             {
@@ -1326,7 +1329,7 @@ R_DATA** RenderF(TFACE **Q, R_DATA** pool, int Zmin)
                 vlast->next = v;
                 vlast = v;
             }
-            //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+            //РЈСЃС‚Р°РЅРѕРІРёРј РїСЂР°РІРёР»СЊРЅС‹Рµ next/prev С‚РѕР»СЊРєРѕ РґР»СЏ РїРµСЂРІРѕРіРѕ Рё РїРѕСЃР»РµРґРЅРµРіРѕ СЌР»РµРјРµРЅС‚Р°, РѕРЅРё РЅР°Рј Р±СѓРґСѓС‚ РЅСѓР¶РЅС‹ РІ СЃРёРЅР°РіРѕРЅРµ
             vlast->next = NULL;
             f->vertex->prev = vlast;
             fout->next = f;
@@ -1390,7 +1393,7 @@ void SortFacesAndDraw(void)
     face = Qfaces;
     memset(q1, 0, sizeof(q1));
     memset(q2, 0, sizeof(q2));
-    //Первый этап: расчет среднего и заполнение букета
+    //РџРµСЂРІС‹Р№ СЌС‚Р°Рї: СЂР°СЃС‡РµС‚ СЃСЂРµРґРЅРµРіРѕ Рё Р·Р°РїРѕР»РЅРµРЅРёРµ Р±СѓРєРµС‚Р°
     for (; face; face=fnext)
     {
         fnext = face->next;
@@ -1422,7 +1425,7 @@ void SortFacesAndDraw(void)
             } while ((face = fnext) != NULL);
         }
     }
-    //Все, теперь можно просто собрать всех и вся.
+    //Р’СЃРµ, С‚РµРїРµСЂСЊ РјРѕР¶РЅРѕ РїСЂРѕСЃС‚Рѕ СЃРѕР±СЂР°С‚СЊ РІСЃРµС… Рё РІСЃСЏ.
     R_DATA** pool = RDataPool;
     pool = RenderF(q2, pool, 8);
     if (pool != RDataPool)
@@ -1432,7 +1435,7 @@ void SortFacesAndDraw(void)
     pool=RenderT(q2, pool, 8);
     if (pool != RDataPool)
     {
-        //Не все грани возвращены в стек
+        //РќРµ РІСЃРµ РіСЂР°РЅРё РІРѕР·РІСЂР°С‰РµРЅС‹ РІ СЃС‚РµРє
         exit(5000);
     }
     if (f_render_log) fclose(f_render_log);
@@ -1490,7 +1493,7 @@ TFACE* RotateAllFaces(TFACE* face, FIXP32 CamX, FIXP32 CamY, FIXP32 CamZ)
     {
         fnext = face->next;
         FIXP32 X, Y, Z;
-        //Тест нормали
+        //РўРµСЃС‚ РЅРѕСЂРјР°Р»Рё
         X = face->MX;// v->point->X;
         Y = face->MY;// v->point->Y;
         Z = face->MZ;// v->point->Z;
@@ -1498,7 +1501,7 @@ TFACE* RotateAllFaces(TFACE* face, FIXP32 CamX, FIXP32 CamY, FIXP32 CamZ)
         Y -= CamY;
         Z -= CamZ;
         if ((UFIXP32)X + MAX_DISTANCE > MAX_DISTANCE * 2)
-            goto L_return_to_far; //Слишком далеко
+            goto L_return_to_far; //РЎР»РёС€РєРѕРј РґР°Р»РµРєРѕ
         if ((UFIXP32)Y + MAX_DISTANCE > MAX_DISTANCE * 2)
             goto L_return_to_far;
         if ((UFIXP32)Z + MAX_DISTANCE > MAX_DISTANCE * 2)
@@ -1512,7 +1515,7 @@ TFACE* RotateAllFaces(TFACE* face, FIXP32 CamX, FIXP32 CamY, FIXP32 CamZ)
         }
         else
         {
-            //Грань подходит, сохраняем
+            //Р“СЂР°РЅСЊ РїРѕРґС…РѕРґРёС‚, СЃРѕС…СЂР°РЅСЏРµРј
             //face->avg_z = 0x7FFF;
             prepared_faces_stage2++;
             face->next = list;
@@ -1520,19 +1523,19 @@ TFACE* RotateAllFaces(TFACE* face, FIXP32 CamX, FIXP32 CamY, FIXP32 CamZ)
         }
     }
     face = list;
-    //Проворачиваем все вершины
+    //РџСЂРѕРІРѕСЂР°С‡РёРІР°РµРј РІСЃРµ РІРµСЂС€РёРЅС‹
     for (; face; face = fnext)
     {
         fnext = face->next;
         FIXP32 X, Y, Z, x, y, z;
-        //Грань пока подходит, пробуем обновить все вершины
+        //Р“СЂР°РЅСЊ РїРѕРєР° РїРѕРґС…РѕРґРёС‚, РїСЂРѕР±СѓРµРј РѕР±РЅРѕРІРёС‚СЊ РІСЃРµ РІРµСЂС€РёРЅС‹
         FPXYZ* p;
         for (TVERTEX* v = face->vertexes; (p = v->p) != NULL; v++)
         {
-            if (p->seq == FrameCounter) continue; //Эту точку уже обновили
+            if (p->seq == FrameCounter) continue; //Р­С‚Сѓ С‚РѕС‡РєСѓ СѓР¶Рµ РѕР±РЅРѕРІРёР»Рё
             int f;
             f = 0;
-            //Расчет новых координат из-за поворотов и движения
+            //Р Р°СЃС‡РµС‚ РЅРѕРІС‹С… РєРѕРѕСЂРґРёРЅР°С‚ РёР·-Р·Р° РїРѕРІРѕСЂРѕС‚РѕРІ Рё РґРІРёР¶РµРЅРёСЏ
             X = p->X - CamX;
             Y = p->Y - CamY;
             Z = p->Z - CamZ;
@@ -1545,8 +1548,8 @@ TFACE* RotateAllFaces(TFACE* face, FIXP32 CamX, FIXP32 CamY, FIXP32 CamZ)
             p->seq = FrameCounter;
             if (z < MIN_Z_CLIP)
             {
-                z = 0; //Чтобы проверка по пирамиде выдала нужные результаты (-max,0,+max)
-                f = SCOORD_NOT_VALID; //Точно ошибка экранных координат
+                z = 0; //Р§С‚РѕР±С‹ РїСЂРѕРІРµСЂРєР° РїРѕ РїРёСЂР°РјРёРґРµ РІС‹РґР°Р»Р° РЅСѓР¶РЅС‹Рµ СЂРµР·СѓР»СЊС‚Р°С‚С‹ (-max,0,+max)
+                f = SCOORD_NOT_VALID; //РўРѕС‡РЅРѕ РѕС€РёР±РєР° СЌРєСЂР°РЅРЅС‹С… РєРѕРѕСЂРґРёРЅР°С‚
             }
             uint16_t logx, logy, logz;
             logz = LOGtab[z];
@@ -1587,7 +1590,7 @@ TFACE* RotateAllFaces(TFACE* face, FIXP32 CamX, FIXP32 CamY, FIXP32 CamZ)
             prepared_points++;
         }
     }
-    //Все вершины провернуты
+    //Р’СЃРµ РІРµСЂС€РёРЅС‹ РїСЂРѕРІРµСЂРЅСѓС‚С‹
     face = list;
     list = NULL;
     for (; face; face = fnext)
@@ -1595,7 +1598,7 @@ TFACE* RotateAllFaces(TFACE* face, FIXP32 CamX, FIXP32 CamY, FIXP32 CamZ)
         fnext = face->next;
         UFIXP16 x, y;
         FIXP16 z;
-        //Грань пока подходит, пробуем обновить все вершины
+        //Р“СЂР°РЅСЊ РїРѕРєР° РїРѕРґС…РѕРґРёС‚, РїСЂРѕР±СѓРµРј РѕР±РЅРѕРІРёС‚СЊ РІСЃРµ РІРµСЂС€РёРЅС‹
         FIXP16 max_z = -32768;
         UFIXP16 l = 0xFFFF;
         UFIXP16 r = 0x0000;
@@ -1619,8 +1622,8 @@ TFACE* RotateAllFaces(TFACE* face, FIXP32 CamX, FIXP32 CamY, FIXP32 CamZ)
             prepared_vertexes++;
         }
         if (max_z < MIN_Z_CLIP)
-            continue;   //Плоскость лежит за нами, отбрасываем
-        //Проверяем на укладывание во весь экран
+            continue;   //РџР»РѕСЃРєРѕСЃС‚СЊ Р»РµР¶РёС‚ Р·Р° РЅР°РјРё, РѕС‚Р±СЂР°СЃС‹РІР°РµРј
+        //РџСЂРѕРІРµСЂСЏРµРј РЅР° СѓРєР»Р°РґС‹РІР°РЅРёРµ РІРѕ РІРµСЃСЊ СЌРєСЂР°РЅ
 #if 1
         if (l >= SCR_R8-254)
             continue;
@@ -1633,7 +1636,7 @@ TFACE* RotateAllFaces(TFACE* face, FIXP32 CamX, FIXP32 CamY, FIXP32 CamZ)
 #endif
         //face->avg_z = max_z;
         face->flags = face_flag;
-        //Более-менее, добавляем в список рабочих
+        //Р‘РѕР»РµРµ-РјРµРЅРµРµ, РґРѕР±Р°РІР»СЏРµРј РІ СЃРїРёСЃРѕРє СЂР°Р±РѕС‡РёС…
         prepared_faces_stage3++;
         face->next = list;
         list = face;
@@ -1658,7 +1661,7 @@ void PrepareRenderFrame(void)
 
 KDTREE_NODE* FindKDtreeNode(FIXP32 X, FIXP32 Y, FIXP32 Z)
 {
-    X >>= 9; //Т.к. шаг координаты у нас 2.0
+    X >>= 9; //Рў.Рє. С€Р°Рі РєРѕРѕСЂРґРёРЅР°С‚С‹ Сѓ РЅР°СЃ 2.0
     if (X > 127 || X < -128)
     {
         exit(10000);
@@ -1788,7 +1791,7 @@ TFACE* DecrunchPVS(FIXP32 X, FIXP32 Y, FIXP32 Z)
     last_idx = idx;
     uint8_t* s;
     s = packed_pvs + idx;
-    //Теперь мы готовы распаковать
+    //РўРµРїРµСЂСЊ РјС‹ РіРѕС‚РѕРІС‹ СЂР°СЃРїР°РєРѕРІР°С‚СЊ
     uint8_t b;
     KDTREE_BIG_LEAF* leaf = kd_tree_big_leafs;
     uint16_t l;
@@ -1796,7 +1799,7 @@ TFACE* DecrunchPVS(FIXP32 X, FIXP32 Y, FIXP32 Z)
     {
         if (b & 0x80)
         {
-            //Битовая маска
+            //Р‘РёС‚РѕРІР°СЏ РјР°СЃРєР°
             do
             {
                 if (b & 1)
@@ -1820,7 +1823,7 @@ TFACE* DecrunchPVS(FIXP32 X, FIXP32 Y, FIXP32 Z)
             }
             if (b & 1)
             {
-                //Последовательность единиц
+                //РџРѕСЃР»РµРґРѕРІР°С‚РµР»СЊРЅРѕСЃС‚СЊ РµРґРёРЅРёС†
                 do
                 {
                     list = DecrunchPVSleaf(list, leaf);
@@ -1829,7 +1832,7 @@ TFACE* DecrunchPVS(FIXP32 X, FIXP32 Y, FIXP32 Z)
             }
             else
             {
-                //Последовательность нулей
+                //РџРѕСЃР»РµРґРѕРІР°С‚РµР»СЊРЅРѕСЃС‚СЊ РЅСѓР»РµР№
                 leaf += l;
             }
         }
@@ -1850,7 +1853,7 @@ TFACE* AddPlayerToQ(TFACE* fq)
     Y = PlayerY - CamY;
     Z = PlayerZ - CamZ;
     if ((UFIXP32)X + MAX_DISTANCE > MAX_DISTANCE * 2)
-        goto L_return_to_far; //Слишком далеко
+        goto L_return_to_far; //РЎР»РёС€РєРѕРј РґР°Р»РµРєРѕ
     if ((UFIXP32)Y + MAX_DISTANCE > MAX_DISTANCE * 2)
         goto L_return_to_far;
     if ((UFIXP32)Z + MAX_DISTANCE > MAX_DISTANCE * 2)

@@ -15,6 +15,7 @@
 
 #define CLEAR_CHUNKY_BY_BLITTER
 
+//For loading SPYRO uncomment and change bm_sz_bits	= 7 in render_utils.s
 //#define LOAD_SPYRO
 
 struct ExecBase *SysBase ALIGN4;
@@ -1499,7 +1500,9 @@ int main()
 	custom->intreq=(1<<INTB_VERTB);//reset vbl req
 	do
 	{
-#if 1
+	//Set 1 for accurate profiling
+	//Set 0 for async engine run (better for play)
+#if 0
 		short fc;
 		fc=frameCounter;
 		while(fc==frameCounter);

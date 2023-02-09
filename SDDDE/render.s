@@ -84,4 +84,5 @@ R_DATA_THR_faces	=	RDataPool+192*4
 
 TRender_thr		=	8
 
-TSL_z_thr		=	0x480
+TSL_z_thr		=	0x480	| Z threshold for tesselation
+

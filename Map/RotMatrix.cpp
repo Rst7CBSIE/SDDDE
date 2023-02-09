@@ -100,11 +100,11 @@ void UpdateIMTX(void)
 {
     ConstructBMATRIX(RMTX);
     FIXP32* d = IMATRIX;
-    //x-координата
+    //x-РєРѕРѕСЂРґРёРЅР°С‚Р°
     FIXP32 v0,v1,v2;
     FIXP32 dv0, dv1, dv2;
     int i;
-    //Координата X
+    //РљРѕРѕСЂРґРёРЅР°С‚Р° X
     v0 = -(dv0 = RMTX[0]) << 7;
     v1 = -(dv1 = RMTX[1] * 160 / 100) << 7;
     v2 = -(dv2 = RMTX[2]) << 7;
@@ -121,8 +121,8 @@ void UpdateIMTX(void)
         *d++ = v1; v1 += dv1;
         *d++ = v2; v2 += dv2;
     } while (--i);
-    //Координата Y
-    //Тут мы учтем, что Y у нас надо увеличить на пропорции экрана, чтобы правильно обрезать
+    //РљРѕРѕСЂРґРёРЅР°С‚Р° Y
+    //РўСѓС‚ РјС‹ СѓС‡С‚РµРј, С‡С‚Рѕ Y Сѓ РЅР°СЃ РЅР°РґРѕ СѓРІРµР»РёС‡РёС‚СЊ РЅР° РїСЂРѕРїРѕСЂС†РёРё СЌРєСЂР°РЅР°, С‡С‚РѕР±С‹ РїСЂР°РІРёР»СЊРЅРѕ РѕР±СЂРµР·Р°С‚СЊ
     v0 = -(dv0 = RMTX[3]) << 7;
     v1 = -(dv1 = RMTX[4] * 160 / 100) << 7;
     v2 = -(dv2 = RMTX[5]) << 7;
@@ -139,7 +139,7 @@ void UpdateIMTX(void)
         *d++ = v1; v1 += dv1;
         *d++ = v2; v2 += dv2;
     } while (--i);
-    //Координата Z, тут мы сразу прибавим R
+    //РљРѕРѕСЂРґРёРЅР°С‚Р° Z, С‚СѓС‚ РјС‹ СЃСЂР°Р·Сѓ РїСЂРёР±Р°РІРёРј R
     v0 = -(dv0 = RMTX[6]) << 7;
     v1 = -(dv1 = RMTX[7] * 160 / 100) << 7;
     v2 = -(dv2 = RMTX[8]) << 7;
@@ -160,10 +160,10 @@ void UpdateIMTX(void)
 }
 
 #if 0
-//Считаем матрицу поворота
+//РЎС‡РёС‚Р°РµРј РјР°С‚СЂРёС†Сѓ РїРѕРІРѕСЂРѕС‚Р°
 void PrepareRotMatrix(float YAW, float PITCH, float ROLL)
 {
-    //Уже суммарный вариант, но оси не те
+    //РЈР¶Рµ СЃСѓРјРјР°СЂРЅС‹Р№ РІР°СЂРёР°РЅС‚, РЅРѕ РѕСЃРё РЅРµ С‚Рµ
     float Sx, Sy, Sz, Cx, Cy, Cz;
     Sx = sinf(FM_PI * 2.0f * PITCH);
     Cx = cosf(FM_PI * 2.0f * PITCH);
@@ -186,7 +186,7 @@ void PrepareRotMatrix(float YAW, float PITCH, float ROLL)
 
 void PrepareRotMatrixFIXP32(FIXP32 *m, float YAW, float PITCH, float ROLL)
 {
-    //Уже суммарный вариант, но оси не те
+    //РЈР¶Рµ СЃСѓРјРјР°СЂРЅС‹Р№ РІР°СЂРёР°РЅС‚, РЅРѕ РѕСЃРё РЅРµ С‚Рµ
     float Sx, Sy, Sz, Cx, Cy, Cz;
     float RotMatrix[9];
     Sx = sinf(FM_PI * 2.0f * PITCH);
@@ -206,7 +206,7 @@ void PrepareRotMatrixFIXP32(FIXP32 *m, float YAW, float PITCH, float ROLL)
     RotMatrix[8] = Cx * Cy;
     for (int i = 0; i < 9; i++)
     {
-        m[i] = (FIXP32)(RotMatrix[i] * 16384.0f/* + 0.5f*/); //Два защитных бита
+        m[i] = (FIXP32)(RotMatrix[i] * 16384.0f/* + 0.5f*/); //Р”РІР° Р·Р°С‰РёС‚РЅС‹С… Р±РёС‚Р°
     }
 }
 #endif
@@ -217,7 +217,7 @@ FIXP32 mtx_error;
 static void RotateAndNormalizeMatrix(float * RotMatrix, float YAW, float PITCH, float ROLL)
 {
     float um[9];
-    //Проворот
+    //РџСЂРѕРІРѕСЂРѕС‚
     um[0] = 1.0f;
     um[1] = 0.0f;
     um[2] = 0.0f;
@@ -229,32 +229,32 @@ static void RotateAndNormalizeMatrix(float * RotMatrix, float YAW, float PITCH, 
     um[8] = 1.0f;
     float rm[9];
     float s, c;
-    //Поворот по крену, вокруг оси Z
+    //РџРѕРІРѕСЂРѕС‚ РїРѕ РєСЂРµРЅСѓ, РІРѕРєСЂСѓРі РѕСЃРё Z
     s = sinf(FM_PI * 2.0f * ROLL);
     c = cosf(FM_PI * 2.0f * ROLL);
     rm[0] = c; rm[1] = -s; rm[2] = 0;
     rm[3] = s; rm[4] = c; rm[5] = 0;
     rm[6] = 0; rm[7] = 0; rm[8] = 1;
     MulMatrix(um, rm);
-    //Поворот по питчу, вокруг оси X
+    //РџРѕРІРѕСЂРѕС‚ РїРѕ РїРёС‚С‡Сѓ, РІРѕРєСЂСѓРі РѕСЃРё X
     s = sinf(FM_PI * 2.0f * PITCH);
     c = cosf(FM_PI * 2.0f * PITCH);
     rm[0] = 1; rm[1] = 0; rm[2] = 0;
     rm[3] = 0; rm[4] = c; rm[5] = s;
     rm[6] = 0; rm[7] = -s; rm[8] = c;
     MulMatrix(um, rm);
-    //Поворот по курсу, вокруг оси Y
+    //РџРѕРІРѕСЂРѕС‚ РїРѕ РєСѓСЂСЃСѓ, РІРѕРєСЂСѓРі РѕСЃРё Y
     s = sinf(FM_PI * 2.0f * -YAW);
     c = cosf(FM_PI * 2.0f * -YAW);
     rm[0] = c; rm[1] = 0; rm[2] = -s;
     rm[3] = 0; rm[4] = 1; rm[5] = 0;
     rm[6] = s; rm[7] = 0; rm[8] = c;
     MulMatrix(um, rm);
-    //Обновляем матрицу поворота
+    //РћР±РЅРѕРІР»СЏРµРј РјР°С‚СЂРёС†Сѓ РїРѕРІРѕСЂРѕС‚Р°
     MulMatrix(RotMatrix, um);
-    //Нормализация матрицы
+    //РќРѕСЂРјР°Р»РёР·Р°С†РёСЏ РјР°С‚СЂРёС†С‹
     float r;
-    //Сначала исправляем ошибки неортогональности осей x и y
+    //РЎРЅР°С‡Р°Р»Р° РёСЃРїСЂР°РІР»СЏРµРј РѕС€РёР±РєРё РЅРµРѕСЂС‚РѕРіРѕРЅР°Р»СЊРЅРѕСЃС‚Рё РѕСЃРµР№ x Рё y
     r = RotMatrix[0] * RotMatrix[3] + RotMatrix[1] * RotMatrix[4] + RotMatrix[2] * RotMatrix[5];
     mtx_error = r;
     r = (-r) / 2.0f;
@@ -263,11 +263,11 @@ static void RotateAndNormalizeMatrix(float * RotMatrix, float YAW, float PITCH, 
     um[2] = RotMatrix[2];
     RotMatrix[0] += RotMatrix[3] * r; RotMatrix[1] += RotMatrix[4] * r; RotMatrix[2] += RotMatrix[5] * r;
     RotMatrix[3] += um[0] * r; RotMatrix[4] += um[1] * r; RotMatrix[5] += um[2] * r;
-    //Ось z считаем как векторное произведенние осей x и y
+    //РћСЃСЊ z СЃС‡РёС‚Р°РµРј РєР°Рє РІРµРєС‚РѕСЂРЅРѕРµ РїСЂРѕРёР·РІРµРґРµРЅРЅРёРµ РѕСЃРµР№ x Рё y
     RotMatrix[6] = RotMatrix[1] * RotMatrix[5] - RotMatrix[2] * RotMatrix[4];
     RotMatrix[7] = RotMatrix[2] * RotMatrix[3] - RotMatrix[0] * RotMatrix[5];
     RotMatrix[8] = RotMatrix[0] * RotMatrix[4] - RotMatrix[1] * RotMatrix[3];
-    //Теперь каждую ось мы нормализуем, ибо ее длина должна быть равна 1
+    //РўРµРїРµСЂСЊ РєР°Р¶РґСѓСЋ РѕСЃСЊ РјС‹ РЅРѕСЂРјР°Р»РёР·СѓРµРј, РёР±Рѕ РµРµ РґР»РёРЅР° РґРѕР»Р¶РЅР° Р±С‹С‚СЊ СЂР°РІРЅР° 1
     r = RotMatrix[0] * RotMatrix[0] + RotMatrix[1] * RotMatrix[1] + RotMatrix[2] * RotMatrix[2];
     mtx_error += r;
     r = 1.5f - r / 2.0f;
@@ -367,10 +367,10 @@ void RotateMTX(FIXP32* RM, FIXP32 YAW, FIXP32 PITCH, FIXP32 ROLL)
 
 void NormalizeMTX(FIXP32* RM)
 {
-    //Нормализация матрицы
+    //РќРѕСЂРјР°Р»РёР·Р°С†РёСЏ РјР°С‚СЂРёС†С‹
     FIXP32 r;
     FIXP32 um[3];
-    //Сначала исправляем ошибки неортогональности осей x и y
+    //РЎРЅР°С‡Р°Р»Р° РёСЃРїСЂР°РІР»СЏРµРј РѕС€РёР±РєРё РЅРµРѕСЂС‚РѕРіРѕРЅР°Р»СЊРЅРѕСЃС‚Рё РѕСЃРµР№ x Рё y
     r = RM[0] * RM[3] + RM[1] * RM[4] + RM[2] * RM[5];
     r >>= 14;
     mtx_error = r;
@@ -381,7 +381,7 @@ void NormalizeMTX(FIXP32* RM)
     RM[0] += RM[3] * r >> 14; RM[1] += RM[4] * r >> 14; RM[2] += RM[5] * r >> 14;
     RM[3] += um[0] * r >> 14; RM[4] += um[1] * r >> 14; RM[5] += um[2] * r >> 14;
 
-    //Теперь каждую ось мы нормализуем, ибо ее длина должна быть равна 1
+    //РўРµРїРµСЂСЊ РєР°Р¶РґСѓСЋ РѕСЃСЊ РјС‹ РЅРѕСЂРјР°Р»РёР·СѓРµРј, РёР±Рѕ РµРµ РґР»РёРЅР° РґРѕР»Р¶РЅР° Р±С‹С‚СЊ СЂР°РІРЅР° 1
     r = RM[0] * RM[0] + RM[1] * RM[1] + RM[2] * RM[2];
     r >>= 14;
     mtx_error += r;
@@ -398,7 +398,7 @@ void NormalizeMTX(FIXP32* RM)
     RM[4] = RM[4] * r >> 14;
     RM[5] = RM[5] * r >> 14;
     //
-    //Ось z считаем как векторное произведенние осей x и y
+    //РћСЃСЊ z СЃС‡РёС‚Р°РµРј РєР°Рє РІРµРєС‚РѕСЂРЅРѕРµ РїСЂРѕРёР·РІРµРґРµРЅРЅРёРµ РѕСЃРµР№ x Рё y
     RM[6] = (RM[1] * RM[5] - RM[2] * RM[4]) >> 14;
     RM[7] = (RM[2] * RM[3] - RM[0] * RM[5]) >> 14;
     RM[8] = (RM[0] * RM[4] - RM[1] * RM[3]) >> 14;
@@ -411,7 +411,7 @@ void NormalizeMTX(FIXP32* RM)
     RM[7] = RM[7] * r >> 14;
     RM[8] = RM[8] * r >> 14;
 #endif
-    //Сатурация
+    //РЎР°С‚СѓСЂР°С†РёСЏ
 #if 0
     for (int i = 0; i < 9; i++)
     {

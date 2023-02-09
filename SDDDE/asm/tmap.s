@@ -930,25 +930,32 @@ AddVertexesByX_vloop:
 |            save_t2 = (vs2->x + vs2->z) * 4;
 	move.w	RVERTEX.x(a2),d6
 	move.w	RVERTEX.x(a3),d7
-	add.w	RVERTEX.z(a2),d6
-	add.w	RVERTEX.z(a3),d7
+	move.w	RVERTEX.z(a2),d4
+	move.w	RVERTEX.z(a3),d5
+	add.w	d4,d6
+	add.w	d5,d7
 	lsl.w	#2,d6
 	lsl.w	#2,d7
 |            int count = 3 + 1 + 3;
-	moveq	#3+1+3-1,d4
+|	moveq	#3+1+3-1,d4
 AddVertexesByX_sloop:
 |            do
 |            {
 |                save_t1 -= vs1->z;
 |                save_t2 -= vs2->z;
-	sub.w	RVERTEX.z(a2),d6
-	sub.w	RVERTEX.z(a3),d7
+|	sub.w	RVERTEX.z(a2),d6
+|	sub.w	RVERTEX.z(a3),d7
+	sub.w	d4,d6
+	sub.w	d5,d7
+	move.w	d6,d2
+	and.w	d7,d2
+	bmi.s	2f
 |                t2 = save_t2;
 |                t1 = save_t1;
 |                if ((t1 ^ t2) >= 0) continue; //Нет сечения
 	move.w	d6,d2
 	eor.w	d7,d2
-	bpl.s	2f
+	bpl.s	AddVertexesByX_sloop
 |                //Знак поменялся, нам надо посчитать точку
 	move.w	d6,d0
 	move.w	d7,d1
@@ -1027,14 +1034,13 @@ AddVertexesByX_sloop:
 	exg	a2,a3
 	move.l	a4,RVERTEX.vn(a5)
 	move.l	a4,a5
-	bra.s	6f
+	bra.s	AddVertexesByX_sloop
 5:
 	move.l	a6,RVERTEX.vn(a4)
 	move.l	a4,a6
-6:
-2:
+	bra.s	AddVertexesByX_sloop
 |            } while (--count);
-	dbra	d4,AddVertexesByX_sloop
+2:
 |            //Move from stack
 |            while (stack)
 |            {

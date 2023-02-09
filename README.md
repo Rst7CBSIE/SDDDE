@@ -8,6 +8,6 @@ You can find here:
 
 /SplitMap - kd-tree and PVS generator
 
-/SDDDE - Amiga versioon (built with https://github.com/BartmanAbyss/vscode-amiga-debug)
+/SDDDE - Amiga version (built with https://github.com/BartmanAbyss/vscode-amiga-debug)
 
 /target - Compiled binary for Amiga with converted data

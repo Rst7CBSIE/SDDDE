@@ -3,7 +3,7 @@
 #include "render.h"
 #include "renderutils.h"
 
-//Где находится камера, 24.8
+//Р“РґРµ РЅР°С…РѕРґРёС‚СЃСЏ РєР°РјРµСЂР°, 24.8
 FIXP32 CamX=0;
 FIXP32 CamY=0;
 FIXP32 CamZ=0;
@@ -156,7 +156,7 @@ FIXP32 SD2leaf(FIXP32 X, FIXP32 Y, FIXP32 Z)
         xp = X - p->X;
         yp = Y - p->Y;
         zp = Z - p->Z;
-        //Сразу чекнем сторону
+        //РЎСЂР°Р·Сѓ С‡РµРєРЅРµРј СЃС‚РѕСЂРѕРЅСѓ
         //d = xp * face->A14 + yp * face->B14 + zp * face->C14;
         //if (d < 0) continue;
         do
@@ -192,13 +192,13 @@ FIXP32 SD2leaf(FIXP32 X, FIXP32 Y, FIXP32 Z)
 
             if ((x * xp + y * yp + z * zp) < 0)
             {
-                //Теперь считаем проекцию вектора p на вектор а
+                //РўРµРїРµСЂСЊ СЃС‡РёС‚Р°РµРј РїСЂРѕРµРєС†РёСЋ РІРµРєС‚РѕСЂР° p РЅР° РІРµРєС‚РѕСЂ Р°
                 DBG("\t...Camera outside...\n");
                 FIXP32 w;
                 w = xa * xa + ya * ya + za * za;
                 w >>= 15;
                 if (!w)
-                    //    continue;       //Кстати, при вменяемой геометри мы сюда никогда не попадем
+                    //    continue;       //РљСЃС‚Р°С‚Рё, РїСЂРё РІРјРµРЅСЏРµРјРѕР№ РіРµРѕРјРµС‚СЂРё РјС‹ СЃСЋРґР° РЅРёРєРѕРіРґР° РЅРµ РїРѕРїР°РґРµРј
                     goto L1;
                 FIXP32 h;
                 h = xp * xa + yp * ya + zp * za;
@@ -250,7 +250,7 @@ static inline FIXP32 AsrDecay(FIXP32 v)
     return v;
 }
 
-//Перемещаем игрока, а следом за ним - камеру
+//РџРµСЂРµРјРµС‰Р°РµРј РёРіСЂРѕРєР°, Р° СЃР»РµРґРѕРј Р·Р° РЅРёРј - РєР°РјРµСЂСѓ
 void MovePlayer(FIXP32 dX, FIXP32 dY, FIXP32 dZ)
 {
     FIXP32 X, Y, Z;
@@ -362,13 +362,13 @@ void MovePlayer(FIXP32 dX, FIXP32 dY, FIXP32 dZ)
 //L_err:
     if (flog) fclose(flog);
     flog = NULL;
-    //Теперь корректируем положение и матрицу камеры
+    //РўРµРїРµСЂСЊ РєРѕСЂСЂРµРєС‚РёСЂСѓРµРј РїРѕР»РѕР¶РµРЅРёРµ Рё РјР°С‚СЂРёС†Сѓ РєР°РјРµСЂС‹
 #ifdef NO_PLAYER
     CamX = PlayerX;
     CamY = PlayerY;
     CamZ = PlayerZ;
 #else
-    //Камера должна быть сзади и выше игрока
+    //РљР°РјРµСЂР° РґРѕР»Р¶РЅР° Р±С‹С‚СЊ СЃР·Р°РґРё Рё РІС‹С€Рµ РёРіСЂРѕРєР°
     X = MUL(CamDisp_X, RMTXp[0]) + MUL(CamDisp_Y, RMTXp[1]) + MUL(CamDisp_Z, RMTXp[2]) + PlayerX;
     Y = MUL(CamDisp_X, RMTXp[3]) + MUL(CamDisp_Y, RMTXp[4]) + MUL(CamDisp_Z, RMTXp[5]) + PlayerY;
     Z = MUL(CamDisp_X, RMTXp[6]) + MUL(CamDisp_Y, RMTXp[7]) + MUL(CamDisp_Z, RMTXp[8]) + PlayerZ;
