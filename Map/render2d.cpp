@@ -169,6 +169,8 @@ void DrawXorLine(FIXP32 x1, FIXP32 y1, FIXP32 x2, FIXP32 y2, uint8_t color)
 }
 #endif
 
+uint32_t TPALLETTE[32];
+
 void C2P(uint32_t *d)
 {
     uint8_t* ss = ChunkScreenR;// +128 * SCREEN_LEFT + SCREEN_TOP;
@@ -207,7 +209,12 @@ void C2P(uint32_t *d)
             d[x + y * 180 * 4] = prev_pix; x++;
             if (y & 2) x--;
 #else
+#ifdef CMODE_PAL32
+            uint32_t c = TPALLETTE[s[(y >> 2) + (x >> 2) * 128]];
+            c |= 0xFF000000;
+#else
             uint32_t c = PALLETTE[s[(y >> 2) + (x >> 2) * 128]];
+#endif
 #if 0
             prev_pix = (prev_pix & 0xFF00FFFF) | (c & 0x00FF0000);
             d[x + y * 180 * 4] = prev_pix; x++;

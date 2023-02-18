@@ -172,6 +172,7 @@ section_skip_face:
 
 	.align	4
 Tesselation:
+	.if 0
 	Profile 27,d0
 	sub.l	a2,a2								|last far face
 1:
@@ -197,6 +198,7 @@ Tesselation_ret1:
 3:
 	tst.l	a0
 	beq.w	tmap_exit2
+	.endif
 	Profile 28,d0
 	lea		section_qhead-RFACE.next(pc),a1		|point fout to head pointer
 	bra.s	1f
@@ -1111,6 +1113,7 @@ SplitFaceByZ_face_b_empty:
 	bra.w	tmap_prepare
 Tesselation_ret2:
 	move.l	TMAP_LINK_REGISTER_save,TMAP_LINK_REGISTER
+	Profile 29,d0
 	lea		section_qhead-RFACE.next(pc),a1		|point fout to head pointer
 1:
 |
@@ -1672,7 +1675,7 @@ RenderSlicesEnd:
 		addx.l	d3,d0
 	.endm
 
-	.if	1
+	.if	rearrange_tmap_innerloop
 	.macro	map_texel_a
 		move.w	d1,d4
 		move.b	d0,d4

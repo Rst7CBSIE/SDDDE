@@ -63,23 +63,33 @@ void LoadTex1024FromFile(const char* name, uint8_t* D)
     }
 #endif
     fclose(f);
-#if 1
-    f = xfopen("texture.bin", "wb");
-    for (int i = 0; i < 1024 * 256; i++)
+}
+
+static uint8_t bmp_hdr[0x36];
+
+void LoadTexC32FromFile(const char* name, uint8_t* D)
+{
+    FILE* f = xfopen(name, "rb");
+    if (!f) return;
+    //fseek(f, 0x36, SEEK_SET);
+    fread(bmp_hdr, 1, sizeof(bmp_hdr), f);
+    fread(TPALLETTE, 1, sizeof(TPALLETTE), f);
+    //fseek(f, 0x136, SEEK_SET);
+    D += 256 * 1023;
+    for (int i = 0; i < 1024; i++)
     {
-        int c;
-        c = Texture[i];
-        int o;
-        o = 0;
-        if (c & 0x20) o |= 0x80;
-        if (c & 0x10) o |= 0x08;
-        if (c & 0x08) o |= 0x40;
-        if (c & 0x04) o |= 0x04;
-        if (c & 0x02) o |= 0x30;
-        if (c & 0x01) o |= 0x03;
-        fwrite(&o, 1, 1, f);
+        fread(D, 1, 256, f);
+        D -= 256;
     }
     fclose(f);
+}
+
+void LoadTextureFile(void)
+{
+#ifdef CMODE_PAL32
+    LoadTexC32FromFile("texture32c.bmp", Texture);
+#else
+    LoadTex1024FromFile("textures.bmp", Texture);
 #endif
 }
 
@@ -314,6 +324,7 @@ void ComputeAvgColor(TFACE *face)
     if ((max_color & 0x0C)) max_color -= 0x04;
     if ((max_color & 0x03)) max_color -= 0x01;*/
     face->avg_color = max_color;
+#if 0
 #ifdef FADE_TO_BLACK
     max_color = SKY_COLOR;
 #endif
@@ -324,6 +335,7 @@ void ComputeAvgColor(TFACE *face)
             face->T[(v + vmin) * 256 + (u + umin) + 0x20000] = max_color;
         }
     }
+#endif
 #endif
 }
 
@@ -530,11 +542,7 @@ void LoadSpyro(void)
 {
     flog = fopen("load.log", "wt");
     SetWorkDir("spyro\\");
-#ifdef CMODE256
-    LoadTex1024FromFile("Low1.bmp", Texture);
-#else
-    LoadTex1024FromFile("textures.bmp", Texture);
-#endif
+    LoadTextureFile();
     FILE* f = xfopen("world.obj", "rt");
     char str[1024];
     unsigned int top_tvertex = 0;
@@ -996,12 +1004,113 @@ void LoadKDtree()
     DBG("Ok!\n");
 }
 
+void Tex64to62(void)
+{
+    for (int Y = 0; Y < 1024; Y += 64)
+    {
+        for (int y = 15; y > 0; y--)
+        {
+            uint8_t* b = Texture + (Y + y) * 256;
+            for (int x = 0; x < 256; x++)
+            {
+                b[0] = b[-256];
+                b++;
+            }
+        }
+        for (int y = 48; y < 63; y++)
+        {
+            uint8_t* b = Texture + (Y + y) * 256;
+            for (int x = 0; x < 256; x++)
+            {
+                b[0] = b[256];
+                b++;
+            }
+        }
+    }
+    for (int X = 0; X < 256; X += 64)
+    {
+        for (int x = 15; x > 0; x--)
+        {
+            uint8_t* b = Texture + (X + x);
+            for (int y = 0; y < 1024; y++)
+            {
+                b[0] = b[-1];
+                b += 256;
+            }
+        }
+        for (int x = 48; x < 63; x++)
+        {
+            uint8_t* b = Texture + (X + x);
+            for (int y = 0; y < 1024; y++)
+            {
+                b[0] = b[1];
+                b += 256;
+            }
+        }
+    }
+#if 0
+    FILE* f = fopen("test.bmp", "wb");
+    fwrite(bmp_hdr, 1, sizeof(bmp_hdr), f);
+    fwrite(TPALLETTE, 1, sizeof(TPALLETTE), f);
+    //fseek(f, 0x136, SEEK_SET);
+    uint8_t* D = Texture;
+    D += 256 * 1023;
+    for (int i = 0; i < 1024; i++)
+    {
+        fwrite(D, 1, 256, f);
+        D -= 256;
+    }
+    fclose(f);
+
+#endif
+}
+
 //==============================================================================
 void LoadOmni(void)
 {
+    tile_size = 64;
     flog = fopen("load.log", "wt");
     SetWorkDir("omni\\");
-    LoadTex1024FromFile("textures.bmp", Texture);
+    LoadTextureFile();
+    Tex64to62();
+    {
+        FILE* f;
+#ifdef CMODE_PAL32
+        f = xfopen("texture.c32", "wb");
+        fwrite(TPALLETTE, 1, sizeof(TPALLETTE), f);
+        for (int i = 0; i < 1024 * 256; i++)
+        {
+            int c;
+            c = Texture[i];
+            int o;
+            o = 0;
+            if (c & 0x10) o |= 0xC0;
+            if (c & 0x08) o |= 0x30;
+            if (c & 0x04) o |= 0x0C;
+            if (c & 0x02) o |= 0x02;
+            if (c & 0x01) o |= 0x01;
+            fwrite(&o, 1, 1, f);
+        }
+        fclose(f);
+#else
+        f = xfopen("texture.bin", "wb");
+        for (int i = 0; i < 1024 * 256; i++)
+        {
+            int c;
+            c = Texture[i];
+            int o;
+            o = 0;
+            if (c & 0x20) o |= 0x80;
+            if (c & 0x10) o |= 0x08;
+            if (c & 0x08) o |= 0x40;
+            if (c & 0x04) o |= 0x04;
+            if (c & 0x02) o |= 0x30;
+            if (c & 0x01) o |= 0x03;
+            fwrite(&o, 1, 1, f);
+        }
+        fclose(f);
+#endif
+    }
     FILE* f = xfopen("world.obj", "rt");
     char str[1024];
     unsigned int top_tvertex = 0;
@@ -1220,7 +1329,7 @@ void LoadOmni(void)
                         Uu = 0;
                     if (Uu > 0xFFFF)
                         Uu = 0xFFFF;
-#if 1
+#if 0
                     if ((Uu - min_u) >= 0x1000)
                         Uu -= 0x80;
                     else
@@ -1230,26 +1339,14 @@ void LoadOmni(void)
                     else
                         Vv += 0x80;
 #else
-                    if (mu & 0x2000)
-                    {
-                        if ((Uu - min_u) >= 0x1000)
-                            Uu -= 0x80;
-                    }
+                    if ((Uu - min_u) >= 0x1000)
+                        Uu = (Uu - 0x80) & 0xFF00;
                     else
-                    {
-                        if ((Uu - min_u) <= 0x1000)
-                            Uu += 0x80;
-                    }
-                    if (mv & 0x2000)
-                    {
-                        if ((Vv - min_v) >= 0x1000)
-                            Vv -= 0x80;
-                    }
+                        Uu = (Uu + 0x180) & 0xFF00;
+                    if ((Vv - min_v) >= 0x1000)
+                        Vv = (Vv - 0x80) & 0xFF00;
                     else
-                    {
-                        if ((Vv - min_v) <= 0x1000)
-                            Vv += 0x80;
-                    }
+                        Vv = (Vv + 0x180) & 0xFF00;
 #endif
                     InsertNewVertexToFace(face, Vv, Uu, p_by_id[vid[i]]);
                 }

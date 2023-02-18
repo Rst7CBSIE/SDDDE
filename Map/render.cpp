@@ -213,7 +213,11 @@ void DrawFaceEdges(RVERTEX* _v, uint8_t color)
     v = _v;
     do
     {
+#ifdef CMODE_PAL32
+        DrawLine(v->sx, v->sy, sx, sy, 16);
+#else
         DrawLine(v->sx, v->sy, sx, sy, 0x28/*color*/);
+#endif
     } while ((v = v->next) != NULL);
 #endif
 }
@@ -223,541 +227,30 @@ void DrawFaceEdges(RVERTEX* _v, uint8_t color)
 FILE* dump_file;
 uint8_t DumpRequest;
 
+R_DATA** DestroyRFace(RFACE* f, R_DATA** pool)
+{
+    *--pool = (R_DATA*)f; //Возвращаем в пул грань
+    RVERTEX* v = f->vertex;
+    while (v)
+    {
+        *--pool = (R_DATA*)v;
+        v = v->next;
+    }
+    return pool;
+}
+
 #define INIT_RFACEQ(HEAD) ((RFACE*)((uint8_t*)&HEAD - offsetof(RFACE, next)))
-
-R_DATA** AddVertexesByX(RFACE** fout, RFACE* f, R_DATA** pool)
-{
-    RDBG("\t\tAddVertexesByX...\n");
-    do
-    {
-        RVERTEX* vs2 = f->vertex;
-        RVERTEX* vs1 = vs2->prev;
-        RVERTEX* vlast = (RVERTEX*)f;
-        RVERTEX* vd;
-        FIXP16 t1, t2;
-        //goto L_no_add;
-        do
-        {
-            if (vs1->flags & vs2->flags & FACE_DIVIDED) goto L_next;
-            RVERTEX* stack;
-            stack = NULL;
-            FIXP16 save_t2;
-            FIXP16 save_t1;
-            FIXP16 z1, z2;
-            z1 = vs1->z;
-            z2 = vs2->z;
-            save_t1 = (vs1->x + z1) * 4;
-            save_t2 = (vs2->x + z2) * 4;
-            for(;;)
-            {
-                save_t1 -= vs1->z;
-                save_t2 -= vs2->z;
-                t2 = save_t2;
-                t1 = save_t1;
-                if (t1 < 0 && t2 < 0) break;
-                if ((t1 ^ t2) >= 0) continue; //Нет сечения
-                //Знак поменялся, нам надо посчитать точку
-                vd = &(*pool++)->v;
-                vd->flags = SCOORD_NOT_VALID; //Установим флаг невалидности sx/sy
-                if (save_t2 >= 0)
-                {
-                    //Меняем
-                    FIXP16 t; t = t1; t1 = t2; t2 = t;
-                    RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
-                }
-                UFIXP16* p1, * p2, * p;
-                p1 = &vs1->U;
-                p2 = &vs2->U;
-                p = &vd->U;
-                int pcount = 5;
-                FIXP32 t;
-                t = t1;
-                t2 = t1 - t2;
-                t <<= 15;
-                t = t / t2;
-                do
-                {
-                    FIXP16 b, d;
-                    b = *p1++;
-                    d = *p2++;
-                    d -= b;
-                    *p++ = b + ((t * d /* + 0x4000*/) >> 15);
-                } while (--pcount);
-                if (save_t2 >= 0)
-                {
-                    //Меняем назад
-                    RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
-                    vlast->next = vd;
-                    vlast = vd;
-                }
-                else
-                {
-                    vd->next = stack;
-                    stack = vd;
-                }
-            }
-            //Move from stack
-            while (stack)
-            {
-                vlast->next = stack;
-                vlast = stack;
-                stack = stack->next;
-            }
-        L_next:
-            vlast->next = vs2;
-            vlast = vs2;
-            vs1 = vs2;
-        } while ((vs2 = vs2->next) != NULL);
-        //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
-        f->vertex->prev = vlast;
-        vlast->next = NULL;
-        //Добавляем грань на выход
-    //L_no_add:
-        RDBG("\t\t\tsplitted...\n");
-        send_to_render_faces++;
-        (*fout)->next = f;
-        *fout = f;
-    } while ((f = f->next) != NULL);
-    return pool;
-}
-
-R_DATA** AddVertexesByY(RFACE** fout, RFACE* f, R_DATA** pool)
-{
-    RDBG("\t\tAddVertexesByY...\n");
-    //goto L_no_add;
-#if 0
-    RVERTEX* vs2 = f->vertex;
-    RVERTEX* vs1 = vs2->prev;
-    RVERTEX* vlast = (RVERTEX*)f;
-    RVERTEX* vd;
-    FIXP16 t1, t2;
-    do
-    {
-        if (!(vs1->flags & vs2->flags & FACE_DIVIDED)) goto L_next;
-        RVERTEX* stack;
-        stack = NULL;
-        FIXP16 save_t2;
-        FIXP16 save_t1;
-        save_t1 = vs1->z * 5 - vs1->y * 8;
-        save_t2 = vs2->z * 5 - vs2->y * 8;
-        int count = 4;
-        do
-        {
-            save_t1 -= vs1->z * 2;
-            save_t2 -= vs2->z * 2;
-            t2 = save_t2;
-            t1 = save_t1;
-            if ((t1 ^ t2) >= 0) continue; //Нет сечения
-            //Знак поменялся, нам надо посчитать точку
-            vd = &(*pool++)->v;
-            vd->flags = SCOORD_NOT_VALID; //Установим флаг невалидности sx/sy
-            if (save_t2 >= 0)
-            {
-                //Меняем
-                FIXP16 t; t = t1; t1 = t2; t2 = t;
-                RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
-            }
-            UFIXP16* p1, * p2, * p;
-            p1 = &vs1->U;
-            p2 = &vs2->U;
-            p = &vd->U;
-            int pcount = 5;
-            FIXP32 t;
-            t = t1;
-            t2 = t1 - t2;
-            t <<= 15;
-            t = t / t2;
-            do
-            {
-                FIXP16 b, d;
-                b = *p1++;
-                d = *p2++;
-                d -= b;
-                *p++ = b + ((t * d /* + 0x4000*/) >> 15);
-            } while (--pcount);
-            if (save_t2 >= 0)
-            {
-                //Меняем назад
-                RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
-                vlast->next = vd;
-                vlast = vd;
-            }
-            else
-            {
-                vd->next = stack;
-                stack = vd;
-            }
-        } while (--count);
-        //Move from stack
-        while (stack)
-        {
-            vlast->next = stack;
-            vlast = stack;
-            stack = stack->next;
-        }
-    L_next:
-        vlast->next = vs2;
-        vlast = vs2;
-        vs1 = vs2;
-    } while ((vs2 = vs2->next) != NULL);
-#else
-    RVERTEX* vlast = f->vertex->prev;
-    for (int K = 0; K <= 3; K++)
-    {
-        RVERTEX* vs2; 
-        RVERTEX* vs1;
-        vs1 = vlast;
-        vs2 = f->vertex;
-        vlast = (RVERTEX*)f;
-        do
-        {
-            if (!(vs1->flags & vs2->flags & FACE_DIVIDED)) goto L_next;
-            FIXP16 t1, t2;
-            t1 = vs1->z;
-            t2 = vs2->z;
-            switch (K)
-            {
-            case 0: t1 = t1 * 3; t2 = t2 * 3; break;
-            case 1: t1 = t1 * 1; t2 = t2 * 1; break;
-            case 2: t1 = -t1 * 1; t2 = -t2 * 1; break;
-            case 3: t1 = -t1 * 3; t2 = -t2 * 3; break;
-            }
-            t1 -= vs1->y * 8;
-            t2 -= vs2->y * 8;
-            FIXP16 save_t2;
-            save_t2 = t2;
-            if ((t1 ^ t2) < 0)
-            {
-                //Знак поменялся, нам надо посчитать точку
-                RVERTEX* vd;
-                vd = &(*pool++)->v;
-                vd->flags = SCOORD_NOT_VALID | FACE_DIVIDED; //Установим флаг невалидности sx/sy
-                if (save_t2 >= 0)
-                {
-                    //Меняем
-                    FIXP16 t; t = t1; t1 = t2; t2 = t;
-                    RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
-                }
-                UFIXP16* p1, * p2, * p;
-                p1 = &vs1->U;
-                p2 = &vs2->U;
-                p = &vd->U;
-                int pcount = 5;
-                FIXP32 t;
-                t = t1;
-                t2 = t1 - t2;
-                t <<= 15;
-                t = t / t2;
-                do
-                {
-                    FIXP16 b, d;
-                    b = *p1++;
-                    d = *p2++;
-                    d -= b;
-                    *p++ = b + ((t * d /* + 0x4000*/) >> 15);
-                } while (--pcount);
-                if (save_t2 >= 0)
-                {
-                    //Меняем назад
-                    vs2 = vs1;
-                }
-                vlast->next = vd;
-                vlast = vd;
-            }
-        L_next:
-            vlast->next = vs2;
-            vlast = vs2;
-            vs1 = vs2;
-        } while ((vs2 = vs2->next) != NULL);
-        vlast->next = NULL;
-    }
-#endif
-    //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
-    f->vertex->prev = vlast;
-    vlast->next = NULL;
-    //Добавляем грань на выход
-//L_no_add:
-    send_to_render_faces++;
-    (*fout)->next = f;
-    *fout = f;
-    return pool;
-}
-
-R_DATA** SplitFaceByY(RFACE** fout, RFACE* face_a, R_DATA** pool)
-{
-    RDBG("\t\tSplitFaceByY...\n");
-    RFACE* ysplit_qhead;
-    RFACE* fq = INIT_RFACEQ(ysplit_qhead);
-    for (int K = 0; K <= 3; K++)
-    {
-        RVERTEX* vs2;
-        RVERTEX* vs1;
-        vs2 = face_a->vertex;
-        vs1 = vs2->prev;
-        RFACE* face_b;
-        face_b = &(*pool++)->f;
-        face_b->T = face_a->T;
-        face_b->xmax = face_a->xmax;
-        RVERTEX* vlast_a = (RVERTEX*)face_a; //Последняя вершина грани a
-        RVERTEX* vlast_b = (RVERTEX*)face_b; //Последняя вершина грани b
-        do
-        {
-            FIXP16 t1, t2;
-            t1 = vs1->z;
-            t2 = vs2->z;
-            switch (K)
-            {
-            case 0: t1 = t1 * 3; t2 = t2 * 3; break;
-            case 1: t1 = t1 * 1; t2 = t2 * 1; break;
-            case 2: t1 = -t1 * 1; t2 = -t2 * 1; break;
-            case 3: t1 = -t1 * 3; t2 = -t2 * 3; break;
-            }
-            t1 -= vs1->y * 8;
-            t2 -= vs2->y * 8;
-            FIXP16 save_t2;
-            save_t2 = t2;
-            if ((t1 ^ t2) < 0)
-            {
-                //Знак поменялся, нам надо посчитать точку и добавить ее в обе грани
-                RVERTEX* vd1, * vd2;
-                vd1 = &(*pool++)->v;
-                vd2 = &(*pool++)->v;
-                if (vs1->flags & vs2->flags & FACE_DIVIDED)
-                {
-                    vd1->flags = SCOORD_NOT_VALID | FACE_DIVIDED; //Установим флаг невалидности sx/sy
-                    vd2->flags = SCOORD_NOT_VALID | FACE_DIVIDED; //Установим флаг невалидности sx/sy
-                }
-                else
-                {
-                    vd1->flags = SCOORD_NOT_VALID; //Установим флаг невалидности sx/sy
-                    vd2->flags = SCOORD_NOT_VALID; //Установим флаг невалидности sx/sy
-                }
-                if (save_t2 >= 0)
-                {
-                    //Меняем
-                    FIXP16 t; t = t1; t1 = t2; t2 = t;
-                    RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
-                }
-                UFIXP16* p1, * p2, * pd1, * pd2;
-                p1 = &vs1->U;
-                p2 = &vs2->U;
-                pd1 = &vd1->U;
-                pd2 = &vd2->U;
-                int pcount = 5;
-                FIXP32 t;
-                t = t1;
-                t2 = t1 - t2;
-                t <<= 15;
-                //t = (t + (t2 >> 1)) / t2;
-                t = t / t2;
-                do
-                {
-                    FIXP16 b, d;
-                    b = *p1++;
-                    d = *p2++;
-                    d -= b;
-                    b = b + ((t * d /* + 0x4000*/) >> 15);
-                    *pd1++ = b;
-                    *pd2++ = b;
-                } while (--pcount);
-                if (save_t2 >= 0)
-                {
-                    //Меняем назад
-                    vs2 = vs1;
-                }
-                vlast_a->next = vd1;
-                vlast_a = vd1;
-                vlast_b->next = vd2;
-                vlast_b = vd2;
-            }
-            if (save_t2 >= 0)
-            {
-                //Отправляем в грань a
-                vlast_a->next = vs2;
-                vlast_a = vs2;
-            }
-            else
-            {
-                //Отправляем в грань b
-                vlast_b->next = vs2;
-                vlast_b = vs2;
-            }
-            vs1 = vs2;
-        } while ((vs2 = vs2->next) != NULL);
-        //Все, мы все прошли, теперь тест, не надо ли вернуть пустые грани в пул
-        if (vlast_b != (RVERTEX*)face_b)
-        {
-            vlast_b->next = NULL;
-            //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
-            face_b->vertex->prev = vlast_b;
-            //pool = AddVertexesByX(fout, face_b, pool);
-            RDBG("\t\t\tsplitted...\n");
-            fq->next = face_b;
-            fq = face_b;
-        }
-        else
-        {
-            //Грань а пуста
-            *--pool = (R_DATA*)face_b; //Возвращаем в пул грань
-        }
-        if (vlast_a != (RVERTEX*)face_a)
-        {
-            //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
-            vlast_a->next = NULL;
-            face_a->vertex->prev = vlast_a;
-        }
-        else
-        {
-            //Грань а пуста, а значит нам больше нечего резать
-            *--pool = (R_DATA*)face_a; //Возвращаем в пул грань
-            goto L1;
-        }
-    }
-    //Добавляем остатки грани на выход
-    fq->next = face_a;
-    fq = face_a;
-L1:
-    fq->next = NULL;
-    if (ysplit_qhead)
-    {
-        pool = AddVertexesByX(fout, ysplit_qhead, pool);
-    }
-    return pool;
-}
-
-R_DATA** SplitFaceByZ(RFACE** fout, RFACE* face_a, R_DATA** pool)
-{
-    RDBG("\tSplitFaceByZ...\n");
-    RVERTEX* vs2;
-    RVERTEX* vs1;
-    vs2 = face_a->vertex;
-    vs1 = vs2->prev;
-    RFACE* face_b;
-    face_b = &(*pool++)->f;
-    face_b->T = face_a->T;
-    face_b->xmax = face_a->xmax;
-    RVERTEX* vlast_a = (RVERTEX*)face_a; //Последняя вершина грани a
-    RVERTEX* vlast_b = (RVERTEX*)face_b; //Последняя вершина грани b
-    do
-    {
-        FIXP16 t1, t2;
-        t1 = vs1->z;
-        t2 = vs2->z;
-        t1 -= TSL_Z_THR;
-        t2 -= TSL_Z_THR;
-        FIXP16 save_t2;
-        save_t2 = t2;
-        if ((t1 ^ t2) < 0)
-        {
-            //Знак поменялся, нам надо посчитать точку и добавить ее в обе грани
-            RVERTEX* vd1, * vd2;
-            vd1 = &(*pool++)->v;
-            vd2 = &(*pool++)->v;
-            vd1->flags = SCOORD_NOT_VALID | FACE_DIVIDED; //Установим флаг невалидности sx/sy
-            vd2->flags = SCOORD_NOT_VALID | FACE_DIVIDED; //Установим флаг невалидности sx/sy
-            if (save_t2 >= 0)
-            {
-                //Меняем
-                FIXP16 t; t = t1; t1 = t2; t2 = t;
-                RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
-            }
-            UFIXP16* p1, * p2, * pd1, *pd2;
-            p1 = &vs1->U;
-            p2 = &vs2->U;
-            pd1 = &vd1->U;
-            pd2 = &vd2->U;
-            int pcount = 5;
-            FIXP32 t;
-            t = t1;
-            t2 = t1 - t2;
-            t <<= 15;
-            //t = (t + (t2 >> 1)) / t2;
-            t = t / t2;
-            do
-            {
-                FIXP16 b, d;
-                b = *p1++;
-                d = *p2++;
-                d -= b;
-                b = b + ((t * d /* + 0x4000*/) >> 15);
-                *pd1++ = b;
-                *pd2++ = b;
-            } while (--pcount);
-            if (save_t2 >= 0)
-            {
-                //Меняем назад
-                vs2 = vs1;
-            }
-            vlast_a->next = vd1;
-            vlast_a = vd1;
-            vlast_b->next = vd2;
-            vlast_b = vd2;
-        }
-        if (save_t2 >= 0)
-        {
-            //Отправляем в грань b
-            vlast_a->next = vs2;
-            vlast_a = vs2;
-        }
-        else
-        {
-            //Отправляем в грань b
-            vlast_b->next = vs2;
-            vlast_b = vs2;
-        }
-        vs1 = vs2;
-    } while ((vs2 = vs2->next) != NULL);
-    //Все, мы все прошли, теперь тест, не надо ли вернуть пустые грани в пул
-    if (vlast_a != (RVERTEX*)face_a)
-    {
-        //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
-        vlast_a->next = NULL;
-        face_a->vertex->prev = vlast_a;
-        if (vlast_b != (RVERTEX*)face_b)
-        {
-            pool = AddVertexesByY(fout, face_a, pool);
-        }
-        else
-        {
-            *--pool = (R_DATA*)face_b; //Возвращаем в пул грань
-            RDBG("\t\tNo tesselation...\n");
-            send_to_render_faces++;
-            (*fout)->next = face_a;
-            *fout = face_a;
-            return pool;
-        }
-    }
-    else
-    {
-        //Грань а пуста
-        *--pool = (R_DATA*)face_a; //Возвращаем в пул грань
-    }
-    if (vlast_b != (RVERTEX*)face_b)
-    {
-        //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
-        vlast_b->next = NULL;
-        face_b->vertex->prev = vlast_b;
-        //У нас что-то есть в ближней зоне, режем ее по Y
-        pool = SplitFaceByY(fout, face_b, pool);
-    }
-    else
-    {
-        //Грань а пуста
-        *--pool = (R_DATA*)face_b; //Возвращаем в пул грань
-    }
-    return pool;
-}
 
 int max_pool_used;
 
-R_DATA** tmap(RFACE* f, R_DATA** pool)
+RFACE* CullingT_qhead;
+RFACE* CullingT_qtail;
+
+R_DATA** CullingT(RFACE** tail, RFACE* f, R_DATA** pool)
 {
     static_assert(offsetof(RVERTEX, next) == 0, "Incorrect offset of RVERTEX.next");
     static_assert(offsetof(RFACE, vertex) == 0, "Incorrect offset of RFACE.vertex");
-    RFACE* section_qhead;
-    int N = 0;
-    RFACE* fout;
-    fout = INIT_RFACEQ(section_qhead);
+    RFACE* fout = *tail;
     do
     {
         if (!(f->xmax & SCOORD_NOT_VALID)) goto L_accept;
@@ -882,221 +375,776 @@ R_DATA** tmap(RFACE* f, R_DATA** pool)
         } while (--stage);
         f->vertex->prev = vlast; //Сохраним для потомков
     L_accept:
-#if 0
-        if (f->xmax & TSL_FLAG_NEAR)
-        {
-            RDBG("\tNear face...\n");
-            pool = SplitFaceByY(&fout, f, pool);
-        }
-        else if (f->xmax & TSL_FLAG_DIVIDE)
-        {
-            pool = SplitFaceByZ(&fout, f, pool);
-        }
-        else
-        {
-            RDBG("\tNo tesselation...\n");
-            send_to_render_faces++;
-            if (!fout)
-            {
-                CScoordThead = f;
-            }
-            else
-            {
-                fout->next = f;
-            }
-            fout = f;
-            N++;
-        }
-#endif
         fout->next = f;
         fout = f;
-        N++;
     L_discard:
         ;
     } while ((f = f->next) != NULL);
-    RDBG("%d faces culled\n", N);
     fout->next = NULL;
-    if (!section_qhead)
-    {
-        RDBG("Empty after culling!\n");
-        return pool;
-    }
-    //Сначала прогоним всех до первой тесселяции
-    //Это нужно, чтобы освободить уже аллоцированные вершины/грани
-    RFACE* fnext;
-    fnext = NULL;
-    f = section_qhead;
-    N = 0;
+    *tail = fout;
+    return pool;
+}
+
+R_DATA** AddVertexesByY(RFACE* f, R_DATA** pool)
+{
+    int N = 0;
+    RFACE* tout_qhead;
+    RFACE* fout = INIT_RFACEQ(tout_qhead);
     do
     {
-        if (f->xmax & (TSL_FLAG_NEAR | TSL_FLAG_DIVIDE))
-            break;
-        fnext = f;
+        RVERTEX* vlast = f->vertex->prev;
+        for (int K = 0; K <= 3; K++)
+        {
+            RVERTEX* vs2;
+            RVERTEX* vs1;
+            vs1 = vlast;
+            vs2 = f->vertex;
+            vlast = (RVERTEX*)f;
+            do
+            {
+                if (!(vs1->flags & vs2->flags & EDGE_DIVIDED)) goto L_next;
+                FIXP16 t1, t2;
+                t1 = vs1->z;
+                t2 = vs2->z;
+                switch (K)
+                {
+                case 0: t1 = t1 * 3; t2 = t2 * 3; break;
+                case 1: t1 = t1 * 1; t2 = t2 * 1; break;
+                case 2: t1 = -t1 * 1; t2 = -t2 * 1; break;
+                case 3: t1 = -t1 * 3; t2 = -t2 * 3; break;
+                }
+                t1 -= vs1->y * 8;
+                t2 -= vs2->y * 8;
+                FIXP16 save_t2;
+                save_t2 = t2;
+                if ((t1 ^ t2) < 0)
+                {
+                    //Знак поменялся, нам надо посчитать точку
+                    RVERTEX* vd;
+                    vd = &(*pool++)->v;
+                    vd->flags = SCOORD_NOT_VALID | EDGE_DIVIDED; //Установим флаг невалидности sx/sy
+                    if (save_t2 >= 0)
+                    {
+                        //Меняем
+                        FIXP16 t; t = t1; t1 = t2; t2 = t;
+                        RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
+                    }
+                    UFIXP16* p1, * p2, * p;
+                    p1 = &vs1->U;
+                    p2 = &vs2->U;
+                    p = &vd->U;
+                    int pcount = 5;
+                    FIXP32 t;
+                    t = t1;
+                    t2 = t1 - t2;
+                    t <<= 15;
+                    t = t / t2;
+                    do
+                    {
+                        FIXP16 b, d;
+                        b = *p1++;
+                        d = *p2++;
+                        d -= b;
+                        *p++ = b + ((t * d /* + 0x4000*/) >> 15);
+                    } while (--pcount);
+                    if (save_t2 >= 0)
+                    {
+                        //Меняем назад
+                        vs2 = vs1;
+                    }
+                    vlast->next = vd;
+                    vlast = vd;
+                }
+            L_next:
+                vlast->next = vs2;
+                vlast = vs2;
+                vs1 = vs2;
+            } while ((vs2 = vs2->next) != NULL);
+            vlast->next = NULL;
+        }
+        //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+        f->vertex->prev = vlast;
+        vlast->next = NULL;
+        //Добавляем грань на выход
+    //L_no_add:
+        send_to_render_faces++;
+        fout->next = f;
+        fout = f;
         N++;
     } while ((f = f->next) != NULL);
-    //Теперь f у нас указывает на первую грань для тесселяции
-    //fnext - на последнюю грань, которую можно принудительно отрисовать сразу
-    if (fnext)
-    {
-        fnext->next = NULL;
-        RDBG("%d far faces send to tmap_prepare (pool=%d)\n", N, (int)(pool - RDataPool));
-        pool = tmap_prepare(section_qhead, pool);
-        RDBG("Far faces rendered (pool=%d)\n", (int)(pool - RDataPool));
-    }
-    if (!f)
-    {
-        RDBG("No faces for tesselation\n");
-        return pool;
-    }
-    //А в f у нас еще остались вполне вменяемые грани
-    fout = INIT_RFACEQ(section_qhead);
-    N = 0;
+    int i;
+    i = (int)(pool - RDataPool);
+    if (i > max_pool_used)
+        max_pool_used = i;
+    RDBG("Send %d far faces to tmap_prepare (pool=%d)\n", N, (int)(pool - RDataPool));
+    pool = tmap_prepare(tout_qhead, pool);
+    RDBG("\tpool used after = %d\n", (int)(pool - RDataPool));
+    return pool;
+}
+
+RFACE* NF_qhead;
+RFACE* NF_qtail;
+
+R_DATA** SplitFaceByZ(RFACE* face_a, R_DATA** pool)
+{
+    RFACE* FF_qhead;
+    int Nfar = 0;
+    int Nnear = 0;
+    RFACE* f_far = INIT_RFACEQ(FF_qhead);
+    RFACE* f_near = NF_qtail;
     do
     {
-        N++;
-        fnext = f->next;
-        if (f->xmax & TSL_FLAG_NEAR)
+        RVERTEX* vs2;
+        RVERTEX* vs1;
+        vs2 = face_a->vertex;
+        vs1 = vs2->prev;
+        RFACE* face_b;
+        face_b = &(*pool++)->f;
+        face_b->T = face_a->T;
+        face_b->xmax = face_a->xmax;
+        RVERTEX* vlast_a = (RVERTEX*)face_a; //Последняя вершина грани a
+        RVERTEX* vlast_b = (RVERTEX*)face_b; //Последняя вершина грани b
+        do
         {
-            RDBG("\tNear face...\n");
-            pool = SplitFaceByY(&fout, f, pool);
-            //fout->next = f;
-            //fout = f;
-        }
-        else if (f->xmax & TSL_FLAG_DIVIDE)
+            FIXP16 t1, t2;
+            t1 = vs1->z;
+            t2 = vs2->z;
+            t1 -= TSL_Z_THR;
+            t2 -= TSL_Z_THR;
+            FIXP16 save_t2;
+            save_t2 = t2;
+            if ((t1 ^ t2) < 0)
+            {
+                //Знак поменялся, нам надо посчитать точку и добавить ее в обе грани
+                RVERTEX* vd1, * vd2;
+                vd1 = &(*pool++)->v;
+                vd2 = &(*pool++)->v;
+                vd1->flags = SCOORD_NOT_VALID | EDGE_DIVIDED; //Установим флаг невалидности sx/sy
+                vd2->flags = SCOORD_NOT_VALID | EDGE_DIVIDED; //Установим флаг невалидности sx/sy
+                if (save_t2 >= 0)
+                {
+                    //Меняем
+                    FIXP16 t; t = t1; t1 = t2; t2 = t;
+                    RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
+                }
+                UFIXP16* p1, * p2, * pd1, * pd2;
+                p1 = &vs1->U;
+                p2 = &vs2->U;
+                pd1 = &vd1->U;
+                pd2 = &vd2->U;
+                int pcount = 5;
+                FIXP32 t;
+                t = t1;
+                t2 = t1 - t2;
+                t <<= 15;
+                //t = (t + (t2 >> 1)) / t2;
+                t = t / t2;
+                do
+                {
+                    FIXP16 b, d;
+                    b = *p1++;
+                    d = *p2++;
+                    d -= b;
+                    b = b + ((t * d /* + 0x4000*/) >> 15);
+                    *pd1++ = b;
+                    *pd2++ = b;
+                } while (--pcount);
+                if (save_t2 >= 0)
+                {
+                    //Меняем назад
+                    vs2 = vs1;
+                }
+                vlast_a->next = vd1;
+                vlast_a = vd1;
+                vlast_b->next = vd2;
+                vlast_b = vd2;
+            }
+            if (save_t2 >= 0)
+            {
+                //Отправляем в грань b
+                vlast_a->next = vs2;
+                vlast_a = vs2;
+            }
+            else
+            {
+                //Отправляем в грань b
+                vlast_b->next = vs2;
+                vlast_b = vs2;
+            }
+            vs1 = vs2;
+        } while ((vs2 = vs2->next) != NULL);
+        //Все, мы все прошли, теперь тест, не надо ли вернуть пустые грани в пул
+        if (vlast_a != (RVERTEX*)face_a)
         {
-            RDBG("\tSplit face...\n");
-            pool = SplitFaceByZ(&fout, f, pool);
-            //fout->next = f;
-            //fout = f;
+            //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+            vlast_a->next = NULL;
+            face_a->vertex->prev = vlast_a;
+            //Save to far queue
+            f_far->next = face_a;
+            f_far = face_a;
+            Nfar++;
         }
         else
         {
-            RDBG("\tNo tesselation...\n");
-            fout->next = f;
-            fout = f;
+            //Грань а пуста
+            *--pool = (R_DATA*)face_a; //Возвращаем в пул грань
         }
-        int i;
-        i = (int)(pool - RDataPool);
-        if (i > max_pool_used)
-            max_pool_used = i;
-        if (max_pool_used >= R_DATA_THR_max_faces)
+        if (vlast_b != (RVERTEX*)face_b)
         {
-            RDBG("*********** TOO SMALL POOL ******************\n");
-            max_pool_used = 0;
+            //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+            vlast_b->next = NULL;
+            face_b->vertex->prev = vlast_b;
+            //Save to near queue
+            f_near->next = face_b;
+            f_near = face_b;
+            Nnear++;
         }
-        if (pool >= /*R_DATA_THR_force_draw*/R_DATA_THR_faces)
+        else
         {
-            RDBG("Send %d faces to tmap_prepare (pool=%d)\n", N, (int)(pool - RDataPool));
-            if (f_render_log) fflush(f_render_log);
-            fout->next = NULL;
-            pool = tmap_prepare(section_qhead, pool);
-            fout = INIT_RFACEQ(section_qhead);
-            N = 0;
+            //Грань а пуста
+            *--pool = (R_DATA*)face_b; //Возвращаем в пул грань
         }
-    } while ((f = fnext) != NULL);
-    fout->next = NULL;
-    if (section_qhead)
+    }
+    while ((face_a = face_a->next) != NULL);
+    f_near->next = NULL;
+    NF_qtail = f_near;
+    f_far->next = NULL;
+    int i;
+    i = (int)(pool - RDataPool);
+    if (i > max_pool_used)
+        max_pool_used = i;
+    if (FF_qhead)
     {
-        RDBG("Send(2) %d faces to tmap_prepare (pool=%d)\n", N, (int)(pool - RDataPool));
-        if (f_render_log) fflush(f_render_log);
-        pool = tmap_prepare(section_qhead, pool);
+        RDBG("Send %d faces to AddVertexesByY (pool=%d)\n", Nfar, (int)(pool - RDataPool));
+        pool = AddVertexesByY(FF_qhead, pool);
     }
     return pool;
 }
 
-//Рендерим мир из стека граней
+R_DATA** AddVertexesByX(RFACE* f, R_DATA** pool)
+{
+    RFACE* xsplit_qhead;
+    RFACE* fout = INIT_RFACEQ(xsplit_qhead);
+    int N = 0;
+    do
+    {
+        RVERTEX* vs2 = f->vertex;
+        RVERTEX* vs1 = vs2->prev;
+        RVERTEX* vlast = (RVERTEX*)f;
+        RVERTEX* vd;
+        FIXP16 t1, t2;
+        //goto L_no_add;
+        do
+        {
+            if (vs1->flags & vs2->flags & EDGE_DIVIDED) goto L_next;
+            //goto L_next;
+            RVERTEX* stack;
+            stack = NULL;
+            FIXP16 save_t2;
+            FIXP16 save_t1;
+            FIXP16 z1, z2;
+            z1 = vs1->z;
+            z2 = vs2->z;
+            save_t1 = (vs1->x + z1) * 4;
+            save_t2 = (vs2->x + z2) * 4;
+            for(;;)
+            {
+                save_t1 -= vs1->z;
+                save_t2 -= vs2->z;
+                t2 = save_t2;
+                t1 = save_t1;
+                if (t1 < 0 && t2 < 0) break;
+                if ((t1 ^ t2) >= 0) continue; //Нет сечения
+                //Знак поменялся, нам надо посчитать точку
+                vd = &(*pool++)->v;
+                vd->flags = SCOORD_NOT_VALID; //Установим флаг невалидности sx/sy
+                if (save_t2 >= 0)
+                {
+                    //Меняем
+                    FIXP16 t; t = t1; t1 = t2; t2 = t;
+                    RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
+                }
+                UFIXP16* p1, * p2, * p;
+                p1 = &vs1->U;
+                p2 = &vs2->U;
+                p = &vd->U;
+                int pcount = 5;
+                FIXP32 t;
+                t = t1;
+                t2 = t1 - t2;
+                t <<= 15;
+                t = t / t2;
+                do
+                {
+                    FIXP16 b, d;
+                    b = *p1++;
+                    d = *p2++;
+                    d -= b;
+                    *p++ = b + ((t * d /* + 0x4000*/) >> 15);
+                } while (--pcount);
+                if (save_t2 >= 0)
+                {
+                    //Меняем назад
+                    RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
+                    vlast->next = vd;
+                    vlast = vd;
+                }
+                else
+                {
+                    vd->next = stack;
+                    stack = vd;
+                }
+            }
+            //Move from stack
+            while (stack)
+            {
+                vlast->next = stack;
+                vlast = stack;
+                stack = stack->next;
+            }
+        L_next:
+            vlast->next = vs2;
+            vlast = vs2;
+            vs1 = vs2;
+        } while ((vs2 = vs2->next) != NULL);
+        //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+        f->vertex->prev = vlast;
+        vlast->next = NULL;
+        //Добавляем грань на выход
+    //L_no_add:
+        //RDBG("\t\t\tsplitted...\n");
+        send_to_render_faces++;
+        fout->next = f;
+        fout = f;
+        N++;
+    } while ((f = f->next) != NULL);
+    fout->next = NULL;
+    int i;
+    i = (int)(pool - RDataPool);
+    if (i > max_pool_used)
+        max_pool_used = i;
+    if (i > R_DATA_THR_max_faces)
+    {
+        RDBG("******* TOO SMALL POOL *************\n");
+    }
+    RDBG("Send %d far faces to tmap_prepare (pool=%d)\n", N, (int)(pool - RDataPool));
+    pool = tmap_prepare(xsplit_qhead, pool);
+    RDBG("\tpool used after = %d\n", (int)(pool - RDataPool));
+    return pool;
+}
+
+R_DATA** SplitFaceByY(RFACE* face_a, R_DATA** pool)
+{
+    RFACE* ysplit_qhead;
+    RFACE* fq = INIT_RFACEQ(ysplit_qhead);
+    int N = 0;
+    RFACE* fnext;
+    do
+    {
+        for (int K = 0; K <= 3; K++)
+        {
+            RVERTEX* vs2;
+            RVERTEX* vs1;
+            vs2 = face_a->vertex;
+            vs1 = vs2->prev;
+            RFACE* face_b;
+            face_b = &(*pool++)->f;
+            face_b->T = face_a->T;
+            face_b->xmax = face_a->xmax;
+            RVERTEX* vlast_a = (RVERTEX*)face_a; //Последняя вершина грани a
+            RVERTEX* vlast_b = (RVERTEX*)face_b; //Последняя вершина грани b
+            do
+            {
+                FIXP16 t1, t2;
+                t1 = vs1->z;
+                t2 = vs2->z;
+                switch (K)
+                {
+                case 0: t1 = t1 * 3; t2 = t2 * 3; break;
+                case 1: t1 = t1 * 1; t2 = t2 * 1; break;
+                case 2: t1 = -t1 * 1; t2 = -t2 * 1; break;
+                case 3: t1 = -t1 * 3; t2 = -t2 * 3; break;
+                }
+                t1 -= vs1->y * 8;
+                t2 -= vs2->y * 8;
+                FIXP16 save_t2;
+                save_t2 = t2;
+                if ((t1 ^ t2) < 0)
+                {
+                    //Знак поменялся, нам надо посчитать точку и добавить ее в обе грани
+                    RVERTEX* vd1, * vd2;
+                    vd1 = &(*pool++)->v;
+                    vd2 = &(*pool++)->v;
+                    if (vs1->flags & vs2->flags & EDGE_DIVIDED)
+                    {
+                        vd1->flags = SCOORD_NOT_VALID | EDGE_DIVIDED; //Установим флаг невалидности sx/sy
+                        vd2->flags = SCOORD_NOT_VALID | EDGE_DIVIDED; //Установим флаг невалидности sx/sy
+                    }
+                    else
+                    {
+                        vd1->flags = SCOORD_NOT_VALID; //Установим флаг невалидности sx/sy
+                        vd2->flags = SCOORD_NOT_VALID; //Установим флаг невалидности sx/sy
+                    }
+                    if (save_t2 >= 0)
+                    {
+                        //Меняем
+                        FIXP16 t; t = t1; t1 = t2; t2 = t;
+                        RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
+                    }
+                    UFIXP16* p1, * p2, * pd1, * pd2;
+                    p1 = &vs1->U;
+                    p2 = &vs2->U;
+                    pd1 = &vd1->U;
+                    pd2 = &vd2->U;
+                    int pcount = 5;
+                    FIXP32 t;
+                    t = t1;
+                    t2 = t1 - t2;
+                    t <<= 15;
+                    //t = (t + (t2 >> 1)) / t2;
+                    t = t / t2;
+                    do
+                    {
+                        FIXP16 b, d;
+                        b = *p1++;
+                        d = *p2++;
+                        d -= b;
+                        b = b + ((t * d /* + 0x4000*/) >> 15);
+                        *pd1++ = b;
+                        *pd2++ = b;
+                    } while (--pcount);
+                    if (save_t2 >= 0)
+                    {
+                        //Меняем назад
+                        vs2 = vs1;
+                    }
+                    vlast_a->next = vd1;
+                    vlast_a = vd1;
+                    vlast_b->next = vd2;
+                    vlast_b = vd2;
+                }
+                if (save_t2 >= 0)
+                {
+                    //Отправляем в грань a
+                    vlast_a->next = vs2;
+                    vlast_a = vs2;
+                }
+                else
+                {
+                    //Отправляем в грань b
+                    vlast_b->next = vs2;
+                    vlast_b = vs2;
+                }
+                vs1 = vs2;
+            } while ((vs2 = vs2->next) != NULL);
+            //Все, мы все прошли, теперь тест, не надо ли вернуть пустые грани в пул
+            if (vlast_b != (RVERTEX*)face_b)
+            {
+                vlast_b->next = NULL;
+                //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+                face_b->vertex->prev = vlast_b;
+                //pool = AddVertexesByX(fout, face_b, pool);
+                //RDBG("\t\t\tsplitted...\n");
+                fq->next = face_b;
+                fq = face_b;
+                N++;
+            }
+            else
+            {
+                //Грань а пуста
+                *--pool = (R_DATA*)face_b; //Возвращаем в пул грань
+            }
+            if (vlast_a != (RVERTEX*)face_a)
+            {
+                //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+                vlast_a->next = NULL;
+                face_a->vertex->prev = vlast_a;
+            }
+            else
+            {
+                //Грань а пуста, а значит нам больше нечего резать
+                *--pool = (R_DATA*)face_a; //Возвращаем в пул грань
+                goto L1;
+            }
+        }
+        //Добавляем остатки грани на выход
+        fq->next = face_a;
+        fq = face_a;
+        N++;
+    L1:
+        fnext = face_a->next;
+        if (pool >= R_DATA_THR_faces)
+        {
+            fq->next = NULL;
+            RDBG("Send %d faces to AddVertexesByX (pool=%d)\n", N, (int)(pool - RDataPool));
+            pool = AddVertexesByX(ysplit_qhead, pool);
+            RDBG("\tpool after = %d\n", (int)(pool - RDataPool));
+            fq = INIT_RFACEQ(ysplit_qhead);
+            N = 0;
+            RFLUSH();
+        }
+    } while ((face_a = fnext) != NULL);
+    fq->next = NULL;
+    if (ysplit_qhead)
+    {
+        RDBG("Send %d faces to AddVertexesByX (cleanup, pool=%d)\n", N, (int)(pool - RDataPool));
+        pool = AddVertexesByX(ysplit_qhead, pool);
+    }
+    return pool;
+}
+
+//Render all textured faces from sort queue
 R_DATA** RenderT(TFACE **Q, R_DATA** pool, int Z)
 {
+    //Create 3 queues from sorted faces
+    TFACE* far_qhead;
+    TFACE* mid_qhead;
+    TFACE* near_qhead;
+
+    TFACE* far_f = (TFACE*)(&far_qhead);
+    TFACE* mid_f = (TFACE*)(&mid_qhead);
+    TFACE* near_f = (TFACE*)(&near_qhead);
+
+    TFACE* face;
+
     max_pool_used = 0;
-    RFACE* RenderT_qhead;
-    RFACE* fout;
-    int N = 0;
-    fout = INIT_RFACEQ(RenderT_qhead);
+
     do
     {
         Z--;
-        TFACE* face;
         face = Q[Z];
         for (; face; face = face->next)
         {
-            RFACE* f;
-            RVERTEX* vlast;
-            RVERTEX* v;
-            //Создаем RFACE
-            f = &(*pool++)->f;
-            f->T = (((uint32_t)(face->T - Texture) /* + (blend << 17)*/) >> 1) + 0x80000001;
-            f->xmax = face->flags;
-            if (dump_file)
-            {
-                fprintf(dump_file, "f\t%08x\t%d\t%04X\n", (uint32_t)(face->T - Texture), f->xmax, face->avg_color);
-            }
-            //Преобразуем в список RVERTEX
-            vlast = (RVERTEX*)f;
             FIXP16 min_z, max_z;
             min_z = 0x7FFF;
             max_z = 0x0000;
             for (TVERTEX* tv = face->vertexes; tv->p; tv++)
             {
-                v = &(*pool++)->v;
-                v->U = tv->U;
-                v->V = tv->V;
                 FPXYZ* p;
                 p = tv->p;
-                v->x = p->x;
-                v->y = p->y;
                 FIXP16 z;
                 z = p->z;
-                v->z = z;
                 if (z > max_z) max_z = z;
                 if (z < min_z) min_z = z;
-                v->flags = p->flags & 1;
-                v->sx = p->sx;
-                v->sy = p->sy;
-                if (dump_file)
-                {
-                    fprintf(dump_file, "v\t%04X\t%04X\t%04X\t%04X\t%04X\t%04X\t%04X\t%d\n",
-                        v->sx,
-                        v->sy,
-                        (UFIXP16)v->x,
-                        (UFIXP16)v->y,
-                        (UFIXP16)v->z,
-                        v->U,
-                        v->V,
-                        v->flags
-                    );
-                }
-                vlast->next = v;
-                vlast = v;
             }
             if (min_z < TSL_Z_THR)
             {
                 if (max_z < TSL_Z_THR)
-                    f->xmax |= TSL_FLAG_NEAR;
+                {
+                    face->flags |= TSL_FLAG_NEAR;
+                    near_f->next = face;
+                    near_f = face;
+                }
                 else
-                    f->xmax |= TSL_FLAG_DIVIDE;
+                {
+                    face->flags |= TSL_FLAG_DIVIDE;
+                    mid_f->next = face;
+                    mid_f = face;
+                }
             }
-            //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
-            vlast->next = NULL;
-            f->vertex->prev = vlast;
-            N++;
-            fout->next = f;
-            fout = f;
-            if (pool >= R_DATA_THR_faces)
+            else
             {
-                RDBG("Send %d faces to tmap\n", N);
-                fout->next = NULL;
-                pool = tmap(RenderT_qhead, pool);
-                fout = INIT_RFACEQ(RenderT_qhead);
-                N = 0;
+                far_f->next = face;
+                far_f = face;
             }
         }
-    } while (Z);
+    }
+    while (Z);
+    far_f->next = NULL;
+    mid_f->next = NULL;
+    near_f->next = NULL;
+    RFACE* RenderT_qhead;
+    RFACE* fout;
+    //Now simple cull and draw far_f
+    int N = 0;
+    fout = INIT_RFACEQ(RenderT_qhead);
+    for (face = far_qhead; face; face = face->next)
+    {
+        RFACE* f;
+        RVERTEX* vlast;
+        RVERTEX* v;
+        //Создаем RFACE
+        f = &(*pool++)->f;
+        f->T = (((uint32_t)(face->T - Texture) /* + (blend << 17)*/) >> 1) + 0x80000001;
+        f->xmax = face->flags;
+        //Преобразуем в список RVERTEX
+        vlast = (RVERTEX*)f;
+        for (TVERTEX* tv = face->vertexes; tv->p; tv++)
+        {
+            v = &(*pool++)->v;
+            v->U = tv->U;
+            v->V = tv->V;
+            FPXYZ* p;
+            p = tv->p;
+            v->x = p->x;
+            v->y = p->y;
+            v->z = p->z;
+            v->flags = p->flags & 1;
+            v->sx = p->sx;
+            v->sy = p->sy;
+            vlast->next = v;
+            vlast = v;
+        }
+        vlast->next = NULL;
+        //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+        f->vertex->prev = vlast;
+        N++;
+        fout->next = f;
+        fout = f;
+        if (pool >= R_DATA_THR_faces)
+        {
+            RDBG("Send %d far faces to CullingT\n", N);
+            fout->next = NULL;
+            CullingT_qtail = INIT_RFACEQ(CullingT_qhead);
+            pool = CullingT(&CullingT_qtail, RenderT_qhead, pool);
+            if (CullingT_qhead)
+            {
+                RDBG("Send %d far faces to tmap_prepare\n", N);
+                pool = tmap_prepare(CullingT_qhead, pool);
+            }
+            fout = INIT_RFACEQ(RenderT_qhead);
+            N = 0;
+        }
+    }
     fout->next = NULL;
     if (RenderT_qhead)
     {
-        RDBG("Send %d faces to tmap (cleanup)\n", N);
-        pool = tmap(RenderT_qhead, pool);
+        RDBG("Send %d far faces to CullingT (cleanup)\n",N);
+        CullingT_qtail = INIT_RFACEQ(CullingT_qhead);
+        pool = CullingT(&CullingT_qtail, RenderT_qhead, pool);
+        if (CullingT_qhead)
+        {
+            RDBG("Send %d far faces to tmap_prepare (cleanup)\n",N);
+            pool = tmap_prepare(CullingT_qhead, pool);
+        }
+        fout = INIT_RFACEQ(RenderT_qhead);
     }
+    //Now split all mid-faces
+    NF_qtail = INIT_RFACEQ(NF_qhead);
+    N = 0;
+    for (face = mid_qhead; face; face = face->next)
+    {
+        RFACE* f;
+        RVERTEX* vlast;
+        RVERTEX* v;
+        //Создаем RFACE
+        f = &(*pool++)->f;
+        f->T = (((uint32_t)(face->T - Texture) /* + (blend << 17)*/) >> 1) + 0x80000001;
+        f->xmax = face->flags;
+        //Преобразуем в список RVERTEX
+        vlast = (RVERTEX*)f;
+        for (TVERTEX* tv = face->vertexes; tv->p; tv++)
+        {
+            v = &(*pool++)->v;
+            v->U = tv->U;
+            v->V = tv->V;
+            FPXYZ* p;
+            p = tv->p;
+            v->x = p->x;
+            v->y = p->y;
+            v->z = p->z;
+            v->flags = p->flags & 1;
+            v->sx = p->sx;
+            v->sy = p->sy;
+            vlast->next = v;
+            vlast = v;
+        }
+        vlast->next = NULL;
+        //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+        f->vertex->prev = vlast;
+        N++;
+        fout->next = f;
+        fout = f;
+        //if (pool >= R_DATA_THR_error)
+        if (pool >= R_DATA_THR_faces)
+        {
+            RDBG("*** TOO SMALL POOL, used %d items ***", (int)(pool - RDataPool));
+        }
+    }
+    fout->next = NULL;
+    if (RenderT_qhead)
+    {
+        RDBG("Send %d mid faces to CullingT (pool=%d)\n", N, (int)(pool - RDataPool));
+        CullingT_qtail = INIT_RFACEQ(CullingT_qhead);
+        pool = CullingT(&CullingT_qtail, RenderT_qhead, pool);
+        if (CullingT_qhead)
+        {
+            RDBG("Send %d mid faces to SplitFaceByZ (pool=%d)\n", N, (int)(pool - RDataPool));
+            pool = SplitFaceByZ(CullingT_qhead, pool);
+        }
+    }
+    RFLUSH();
+    //Work with near faces
+    NF_qtail->next = NULL;
+    if (NF_qhead)
+    {
+        RDBG("Send %d near faces to SplitFaceByY (precleanup, pool=%d)\n", N, (int)(pool - RDataPool));
+        pool = SplitFaceByY(NF_qhead, pool);
+        NF_qtail = INIT_RFACEQ(NF_qhead);
+    }
+    N = 0;
+    fout = INIT_RFACEQ(RenderT_qhead);
+    for (face = near_qhead; face; face = face->next)
+    {
+        RFACE* f;
+        RVERTEX* vlast;
+        RVERTEX* v;
+        //Создаем RFACE
+        f = &(*pool++)->f;
+        f->T = (((uint32_t)(face->T - Texture) /* + (blend << 17)*/) >> 1) + 0x80000001;
+        f->xmax = face->flags;
+        //Преобразуем в список RVERTEX
+        vlast = (RVERTEX*)f;
+        for (TVERTEX* tv = face->vertexes; tv->p; tv++)
+        {
+            v = &(*pool++)->v;
+            v->U = tv->U;
+            v->V = tv->V;
+            FPXYZ* p;
+            p = tv->p;
+            v->x = p->x;
+            v->y = p->y;
+            v->z = p->z;
+            v->flags = p->flags & 1;
+            v->sx = p->sx;
+            v->sy = p->sy;
+            vlast->next = v;
+            vlast = v;
+        }
+        vlast->next = NULL;
+        //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+        f->vertex->prev = vlast;
+        N++;
+        fout->next = f;
+        fout = f;
+        if (pool >= R_DATA_THR_near_faces)
+        {
+            RDBG("Send %d near faces to CullingT (pool=%d)\n", N, (int)(pool - RDataPool));
+            fout->next = NULL;
+            pool = CullingT(&NF_qtail, RenderT_qhead, pool);
+            if (NF_qhead)
+            {
+                RDBG("Send %d near faces to SplitFaceByY (pool=%d)\n", N, (int)(pool - RDataPool));
+                pool = SplitFaceByY(NF_qhead, pool);
+                NF_qtail = INIT_RFACEQ(NF_qhead);
+            }
+            fout = INIT_RFACEQ(RenderT_qhead);
+            N = 0;
+        }
+    }
+    fout->next = NULL;
+    if (RenderT_qhead)
+    {
+        RDBG("Send %d near faces to CullingT (cleanup, pool=%d)\n", N, (int)(pool - RDataPool));
+        pool = CullingT(&NF_qtail, RenderT_qhead, pool);
+    }
+    NF_qtail->next = NULL;
+    if (NF_qhead)
+    {
+        RDBG("Send %d near faces to SplitFaceByY (cleanup, pool=%d)\n", N, (int)(pool - RDataPool));
+        pool = SplitFaceByY(NF_qhead, pool);
+    }
+    //All done!
     FinishRenderSlices();
     return pool;
 }
@@ -1272,7 +1320,7 @@ R_DATA** RenderF(TFACE **Q, R_DATA** pool, int Zmin)
     {
         Z--;
         int blend;
-        blend = 4;
+        blend = 0;
         if (Z >= 20) blend = 12;
         else if (Z >= 16) blend = 8;
         else if (Z >= 12) blend = 4;
@@ -1425,7 +1473,6 @@ void SortFacesAndDraw(void)
             } while ((face = fnext) != NULL);
         }
     }
-    //Все, теперь можно просто собрать всех и вся.
     R_DATA** pool = RDataPool;
     pool = RenderF(q2, pool, 8);
     if (pool != RDataPool)
@@ -1433,6 +1480,7 @@ void SortFacesAndDraw(void)
         RDBG("Not all faces free in RenderF!\n");
     }
     pool=RenderT(q2, pool, 8);
+    RFLUSH();
     if (pool != RDataPool)
     {
         //Не все грани возвращены в стек
@@ -1605,7 +1653,7 @@ TFACE* RotateAllFaces(TFACE* face, FIXP32 CamX, FIXP32 CamY, FIXP32 CamZ)
         UFIXP16 b = 0xFFFF;
         UFIXP16 t = 0x0000;
         int face_flag;
-        face_flag = face->flags & ~SCOORD_NOT_VALID;
+        face_flag = face->flags & ~(SCOORD_NOT_VALID | TSL_FLAG_NEAR | TSL_FLAG_DIVIDE);
         FPXYZ* p;
         for (TVERTEX* v = face->vertexes; (p = v->p) != NULL; v++)
         {
@@ -1634,7 +1682,7 @@ TFACE* RotateAllFaces(TFACE* face, FIXP32 CamX, FIXP32 CamY, FIXP32 CamZ)
         if (t <= SCR_B8+255)
             continue;
 #endif
-        //face->avg_z = max_z;
+        face->avg_z = max_z;
         face->flags = face_flag;
         //Более-менее, добавляем в список рабочих
         prepared_faces_stage3++;

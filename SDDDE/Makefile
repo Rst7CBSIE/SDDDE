@@ -10,7 +10,7 @@ cpp_sources := $(wildcard *.cpp) $(wildcard $(addsuffix *.cpp,$(subdirs)))
 cpp_objects := $(addprefix obj/,$(patsubst %.cpp,%.o,$(notdir $(cpp_sources))))
 c_sources := $(wildcard *.c) $(wildcard $(addsuffix *.c,$(subdirs)))
 c_objects := $(addprefix obj/,$(patsubst %.c,%.o,$(notdir $(c_sources))))
-s_sources := support/gcc8_a_support.s asm/render_utils.s asm/tmap.s asm/fmap.s asm/navigate.s
+s_sources := support/gcc8_a_support.s asm/render_utils.s asm/tmap.s asm/fmap.s asm/navigate.s asm/c2p.s
 s_objects := $(addprefix obj/,$(patsubst %.s,%.o,$(notdir $(s_sources))))
 objects := $(cpp_objects) $(c_objects) $(s_objects)
 

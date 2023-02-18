@@ -19,6 +19,7 @@ ZeroChunkyScreen:
 	move.l	4(a7),a0
 	move.w	#16000/4-1,d0
 	moveq.l	#0,d1
+	|move.l	#0xC000C000,d1		| R=1 G=1 B=2
 1:
 	move.l	d1,(a0)+
 	dbra	d0,1b

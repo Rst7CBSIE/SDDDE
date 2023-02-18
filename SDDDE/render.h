@@ -175,4 +175,12 @@ typedef struct
     USHORT scanline;
 }PROFILER_DATA;
 
+typedef struct
+{
+    UBYTE B;
+    UBYTE G;
+    UBYTE R;
+    UBYTE dummy;
+}RGBPAL;
+
 #endif

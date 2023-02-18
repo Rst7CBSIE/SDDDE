@@ -22,6 +22,11 @@
 
 //#define CMODE256
 
+//Use 32 colors with pallette
+#define CMODE_PAL32
+
+extern uint32_t TPALLETTE[32];
+
 typedef uint32_t UFIXP32;
 typedef int32_t FIXP32;
 typedef uint16_t UFIXP16;
@@ -33,9 +38,7 @@ typedef uint64_t UFIXP64;
 #define MAX_COLORS 64
 
 #define SCOORD_NOT_VALID (1)
-//#define PERSP_COMPENSATE (2)
-#define FACE_DIVIDED (2)
-
+#define EDGE_DIVIDED (2)
 #define TSL_FLAG_NEAR (4)
 #define TSL_FLAG_DIVIDE (8)
 
@@ -187,8 +190,8 @@ extern FIXP32 IMATRIX[256 * 3 * 3];
 #endif
 
 #define CamDisp_X (0)
-#define CamDisp_Y (-256)
-#define CamDisp_Z (-256*3/2)
+#define CamDisp_Y (-512)
+#define CamDisp_Z (-512)
 
 
 
@@ -225,7 +228,11 @@ extern FIXP32 Scene_min_Y;
 extern FIXP32 Scene_max_Z;
 extern FIXP32 Scene_min_Z;
 
+#ifdef CMODE_PAL32
+#define SKY_COLOR2 (0UL)
+#else
 #define SKY_COLOR2 (22UL)
+#endif
 //#define SKY_COLOR (0x2BUL)
 #define SKY_COLOR (0)
 
@@ -259,11 +266,12 @@ typedef union
 
 extern R_DATA* RDataPool[R_DATA_TOTAL_SZ];
 
-#define R_DATA_THR_error (RDataPool+R_DATA_TOTAL_SZ)
 //#define R_DATA_THR_force_draw (RDataPool+64)
 #define R_DATA_THR_faces (RDataPool+192)
+#define R_DATA_THR_near_faces (RDataPool+30)
 //#define R_DATA_THR_clip (R_DATA_THR_faces+128)
 #define R_DATA_THR_max_faces (280)
+#define R_DATA_THR_error (RDataPool+R_DATA_THR_max_faces)
 
 R_DATA** tmap_prepare(RFACE* f, R_DATA** pool);
 R_DATA** fmap_prepare(RFACE* f, R_DATA **pool);
@@ -273,6 +281,7 @@ R_DATA** fmap_prepare(RFACE* f, R_DATA **pool);
 extern FILE* f_render_log;
 
 #define RDBG(...) do{if (f_render_log) fprintf(f_render_log,__VA_ARGS__);}while(0)
+#define RFLUSH() do{if (f_render_log) fflush(f_render_log);}while(0)
 
 extern uint32_t FrameCounter;
 

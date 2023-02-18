@@ -125,27 +125,33 @@ void mainForm::TimerProc(void)
     }
 #endif
 
-
+#ifdef NO_PLAYER
     RotateMTX(RMTXp, AccumulatedMDX * 32 + s, AccumulatedMDY * 32 + c, dROLL + (dROLL==0?dROLL2:0) - AccumulatedMDX * 8);
+#else
+    RotateMTX(RMTXp, AccumulatedMDX * 32, 0, dROLL2);
+#endif
     AccumulatedMDX = 0;
     AccumulatedMDY = 0;
-#ifdef NO_PLAYER
     NormalizeMTX(RMTXp);
-    //NormalizeMTX(RMTXp);
+#ifdef NO_PLAYER
     memcpy(RMTX, RMTXp, sizeof(RMTX));
 #else
-    float d;
-    d = (CamX - PlayerX) * RotMatrix[0] +
-        (CamY - PlayerY) * RotMatrix[3] +
-        (CamZ - PlayerZ) * RotMatrix[6];
-    UpdateRotMatrix(-d/10000.0f, -(RotMatrix[5]-0.5f)/10.0f, -RotMatrix[3]/10.0f);
+    RotateMTX(RMTX, 0, -(RMTX[5] - 10000) >> 1, -RMTX[3] >> 1);
+    FIXP32 d;
+    d = (CamX - PlayerX) * RMTX[0] +
+        (CamY - PlayerY) * RMTX[3] +
+        (CamZ - PlayerZ) * RMTX[6];
+    //RotateMTX(RMTX, -d >> 12, -(RMTX[5] - 0x2000) >> 3, -RMTX[3] >> 3);
+    RotateMTX(RMTX, -d >> 12, 0, 0);
+    NormalizeMTX(RMTX);
+    //UpdateRotMatrix(-d/10000.0f, -(RotMatrix[5]-0.5f)/10.0f, -RotMatrix[3]/10.0f);
 #endif
 #ifdef NO_PLAYER
     MovePlayer(CamDX, CamDY, CamDZ);
     UpdateIMTX();
 #else
     MovePlayer(CamDX, CamDY+PSpeedY, CamDZ);
-    PSpeedY += Player_G;
+    //PSpeedY += Player_G;
 #endif
     {
         int x = 0;
@@ -408,13 +414,8 @@ void mainForm::ProcessMouse(int x, int y, int buttons)
     }
     else
     {
-#ifdef NO_PLAYER
-        //RotateMTX(RMTXp, x * 32, y * 32, -x * 8);
         AccumulatedMDX += x;
         AccumulatedMDY += y;
-#else
-        UpdateRotMatrixP((float)x / 1000.0f, /*(float)y / 1000.0f*/0.0f, 0.0f);
-#endif
     }
     if (x != 0 || y != 0)
     {

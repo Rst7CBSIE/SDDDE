@@ -15,6 +15,9 @@
 
 #define CLEAR_CHUNKY_BY_BLITTER
 
+//Use 32 colors mode
+#define CMODE_PAL32
+
 //For loading SPYRO uncomment and change bm_sz_bits	= 7 in render_utils.s
 //#define LOAD_SPYRO
 
@@ -242,7 +245,11 @@ inline USHORT* screenScanDefault(USHORT* copListEnd)
 	*copListEnd++ = offsetof(struct Custom, ddfstrt);
 	*copListEnd++ = 0x38; //fw;
 	*copListEnd++ = offsetof(struct Custom, ddfstop);
+#ifdef CMODE_PAL32
+	*copListEnd++ = 0xA0; //fw+(((width>>4)-1)<<3);
+#else
 	*copListEnd++ = 0xC0; //fw+(((width>>4)-1)<<3);
+#endif
 	*copListEnd++ = offsetof(struct Custom, diwstrt);
 	*copListEnd++ = x+(y<<8);
 	*copListEnd++ = offsetof(struct Custom, diwstop);
@@ -261,6 +268,8 @@ USHORT *GenSplitScreen(USHORT *copPtr, UBYTE **planes)
 	copPtr = copWaitY(copPtr,244);
 	*copPtr++ = offsetof(struct Custom, bplcon0);
 	*copPtr++ = (0<<10)/*dual pf*/|(1<<9)/*color*/|(0<<11)/*ham*/|((0)<<12)/*num bitplanes*/|(1<<0)/*enable bplcon3*/;
+	*copPtr++=offsetof(struct Custom, bpl2mod); //even planes
+	*copPtr++=0;
 	*copPtr++=offsetof(struct Custom, bpl1mod); //odd planes   1,3,5
 	*copPtr++=0;
 	*copPtr++ = offsetof(struct Custom, ddfstop);
@@ -286,6 +295,19 @@ static void drawchar(UBYTE *d, UBYTE c)
 	d[5*40]=*s++;
 	d[6*40]=*s++;
 	d[7*40]=*s++;
+}
+
+static void drawchar5(UBYTE *d, UBYTE c)
+{
+	const UBYTE *s=font+c*8;
+	d[0*40*5]=*s++;
+	d[1*40*5]=*s++;
+	d[2*40*5]=*s++;
+	d[3*40*5]=*s++;
+	d[4*40*5]=*s++;
+	d[5*40*5]=*s++;
+	d[6*40*5]=*s++;
+	d[7*40*5]=*s++;
 }
 
 static void drawstr(UBYTE *d, const char *s)
@@ -506,13 +528,28 @@ TFACE *FindFaceById(ULONG id)
 	return NULL;
 }
 
+RGBPAL PAL32C[32] ALIGN4;
+
 __attribute__((optimize("Os")))
 __attribute__((noinline))
 int LoadWorld(void)
 {
 	LONG sz;
 	BPTR file;
-	printf("Load textures...");
+#ifdef CMODE_PAL32
+	printf("Load pallette: ");
+	file=XOpen("texture.c32");
+	if (!file)
+	{
+		printf("No file!\n");
+		return 1;
+	}
+	sz=Read(file,PAL32C,sizeof(PAL32C));
+	printf("Ok, %ld bytes loaded!\nLoad textures: ",sz);
+	sz=Read(file,Texture,0x40000);
+	Close(file);
+#else
+	printf("Load textures: ");
 	file=XOpen("texture.bin");
 	if (!file)
 	{
@@ -521,6 +558,7 @@ int LoadWorld(void)
 	}
 	sz=Read(file,Texture,0x40000);
 	Close(file);
+#endif
 	printf("Ok, %ld bytes loaded!\n",sz);
 	printf("Load FPXYZ data: ");
 	file=XOpen("FPXYZ.bin");
@@ -782,12 +820,20 @@ void InitDitherColorTable(void)
 	for(int c=0; c<64; d++,c++)
 	{
 		ULONG o=0;
+#ifdef CMODE_PAL32
+		if (c & 0x10) o |= 0xC0;
+		if (c & 0x08) o |= 0x30;
+		if (c & 0x04) o |= 0x0C;
+		if (c & 0x02) o |= 0x02;
+		if (c & 0x01) o |= 0x01;
+#else
 		if (c & 0x20) o |= 0x80;
 		if (c & 0x10) o |= 0x08;
 		if (c & 0x08) o |= 0x40;
 		if (c & 0x04) o |= 0x04;
 		if (c & 0x02) o |= 0x30;
 		if (c & 0x01) o |= 0x03;
+#endif
 		//Screen:
 		//c0 c1
 		//c2 c3
@@ -939,6 +985,69 @@ void RenderWorld(CAMERA *cam)
 L_end:
 }
 
+#ifdef CMODE_PAL32
+
+UBYTE *ChunkFrame ALIGN4;
+UBYTE *Xtab[160] ALIGN4;
+
+static inline UBYTE *XtabCorrect_ysC(UBYTE *s)
+{
+	register volatile UBYTE *_a0 ASM("a0") = s;
+	__asm volatile("jsr XtabCorrect_ys":"+r"(_a0)::"cc");
+	return (UBYTE*)_a0;
+}
+
+__attribute__((optimize("Os")))
+__attribute__((noinline))
+void InitXtab(void)
+{
+	UBYTE **p=Xtab;
+	UBYTE *s = ChunkFrame;
+	s=XtabCorrect_ysC(s);
+	USHORT i;
+	i=20;
+	do
+	{
+		*p++=s;
+		*p++=s+8000;
+		*p++=s+4000;
+		*p++=s+12000;
+
+		*p++=s+1;
+		*p++=s+8001;
+		*p++=s+4001;
+		*p++=s+12001;
+
+		s+=200;
+	} 
+	while (--i);
+}
+
+UBYTE *ShowPlanes ALIGN4;
+UBYTE *WorkPlanes ALIGN4;
+
+UBYTE *C2Pbuffer ALIGN4;
+
+__attribute__((optimize("Os")))
+__attribute__((noinline))
+void StartC2P(void)
+{
+	register volatile UBYTE* _a0 ASM("a0") = ChunkFrame;
+	register volatile UBYTE* _a1 ASM("a1") = C2Pbuffer;
+	register volatile UBYTE* _a2 ASM("a2") = WorkPlanes;
+	__asm volatile ("jsr C2P"
+		:"+r"(_a0),"+r"(_a1),"+r"(_a2)
+		:
+		:"cc","memory","a3","a4","a6","d0","d1","d2","d3","d4","d5","d6","d7"
+	);
+	//Exchange planes
+	UBYTE *p;
+	p=WorkPlanes;
+	WorkPlanes=ShowPlanes;
+	ShowPlanes=p;
+}
+
+#else
 UBYTE *ChunkFrames[2] ALIGN4;
 
 typedef struct
@@ -1110,6 +1219,7 @@ void StartC2P(void)
 	ChunkFrames[0]=ChunkFrames[1];
 	ChunkFrames[1]=xc;
 }
+#endif
 
 volatile short frameCounter = 0;
 volatile short C2Pstate = 0;
@@ -1197,6 +1307,9 @@ static __attribute__((interrupt)) void interruptHandler()
 	if (ireq & INTF_COPER)
 	{
 		custom->intreq=INTF_COPER;
+#ifdef CMODE_PAL32
+
+#else
 		*copJ2_position=0x01FE; //Nop
 		//Мы находимся в безопасном месте для смены видимого буфера
 		//Т.е. изменение cop2lc
@@ -1230,10 +1343,21 @@ static __attribute__((interrupt)) void interruptHandler()
 		custom->bltcon0=DEST;
 		custom->bltsize=(200<<6)|40; //w=80 h=100
 #endif
+#endif
 	}
 	if (ireq & INTF_VERTB)
 	{
 		custom->intreq=INTF_VERTB;
+#ifdef CMODE_PAL32
+		//Setup bitplane DMA
+		UBYTE *bitplane;
+		bitplane=ShowPlanes;
+		custom->bplpt[1]=bitplane+160; //AA
+		custom->bplpt[0]=bitplane+120; //33
+		custom->bplpt[2]=bitplane+80; //A2
+		custom->bplpt[3]=bitplane+40; //A1
+		custom->bplpt[4]=bitplane+0; //MSB plane A0
+#endif
 		// DEMO - increment frameCounter
 		frameCounter++;
 		USHORT mxy=custom->joy0dat;
@@ -1320,10 +1444,14 @@ void PatchXtab_addrs(void)
 {
 	extern UBYTE **Xtab_patch1;
 	extern UBYTE **Xtab_patch2;
+#ifdef CMODE_PAL32
+	Xtab_patch1=Xtab;
+	Xtab_patch2=Xtab;
+#else
 	Xtab_patch1=Xtabs[0];
 	Xtab_patch2=Xtabs[0];
+#endif
 }
-
 
 char *i2a2(char *s, ULONG n)
 {
@@ -1375,6 +1503,126 @@ int main()
 	printf("Addr=%08lx, Rounded=%08lx, Ok\n",(ULONG)MemoryPoolAligned16,(ULONG)Texture);
 
 	if (LoadWorld()) goto L_abort;
+#ifdef CMODE_PAL32
+	printf("Init bitmaps and copper...\n");
+
+	ChunkFrame=(UBYTE*)AllocVec(16000,MEMF_CHIP);
+	ZeroChunkyScreen(ChunkFrame);
+
+#if 0
+	ChunkFrame[1*2+0]=0xFF;
+	ChunkFrame[2*2+8000]=0xFF;
+	ChunkFrame[3*2+4000]=0xFF;
+	ChunkFrame[4*2+12000]=0xFF;
+
+	ChunkFrame[6*2+0]=0xCC;
+	ChunkFrame[7*2+8000]=0xCC;
+	ChunkFrame[8*2+4000]=0xCC;
+	ChunkFrame[9*2+12000]=0xCC;
+#endif
+	C2Pbuffer=(UBYTE*)AllocVec(8000,MEMF_CHIP);
+
+	struct BitMap *bitmap;
+	bitmap = AllocBitMap(320,2*5*100,1,BMF_DISPLAYABLE|BMF_CLEAR,NULL);
+
+	UBYTE *wp;
+	wp=bitmap->Planes[0];
+
+	WorkPlanes=wp;
+	ShowPlanes=wp+40*5*100;
+
+	//drawchar5(WorkPlanes,'A');
+
+	struct BitMap *bitmap2;
+	bitmap2 = AllocBitMap(320,56,4,BMF_DISPLAYABLE|BMF_CLEAR,NULL);
+
+	planes2[0]=(UBYTE*)(bitmap2->Planes[0]);
+	planes2[1]=(UBYTE*)(bitmap2->Planes[1]);
+	planes2[2]=(UBYTE*)(bitmap2->Planes[2]);
+	planes2[3]=(UBYTE*)(bitmap2->Planes[3]);
+
+	USHORT* copper1 = (USHORT*)AllocVec(1024, MEMF_CHIP);
+	USHORT* copPtr = copper1;
+
+	copPtr = screenScanDefault(copPtr);
+	//enable bitplanes	
+	*copPtr++ = offsetof(struct Custom, bplcon0);
+	*copPtr++ = (0<<10)/*dual pf*/
+	|(1<<9)		/*color*/
+	|(0<<11)	/*ham*/
+	|((5)<<12)	/*num bitplanes*/
+	|(1<<0)		/*enable bplcon3*/
+	|(0<<15)	/*hires*/
+	;
+	*copPtr++ = offsetof(struct Custom, bplcon1);	//scrolling
+	*copPtr++ = 0;
+	*copPtr++ = offsetof(struct Custom, bplcon2);	//playfied priority
+	*copPtr++ = 1<<6;//0x24;			//Sprites have priority over playfields
+	*copPtr++ = offsetof(struct Custom, bplcon3);
+	*copPtr++ = 0x0C00;
+	*copPtr++ = offsetof(struct Custom, fmode);
+	*copPtr++ = 0x4003; //64 bit bandwidth + bscan
+
+	//const USHORT lineSize=320/8;
+
+	//set bitplane modulo
+	*copPtr++=offsetof(struct Custom, bpl1mod); //odd planes   1,3,5
+	*copPtr++=0-40;
+	*copPtr++=offsetof(struct Custom, bpl2mod); //even  planes 2,4,6
+	*copPtr++=4*40;
+
+	*copPtr++=offsetof(struct Custom, bplcon3);
+	*copPtr++=0x0000;
+
+	for(int i=0; i<32; i++)
+	{
+		USHORT color;
+		USHORT c8;
+		c8=PAL32C[i].R;
+		c8=c8>>4;
+		color=c8;
+		color<<=4;
+		c8=PAL32C[i].G;
+		c8=c8>>4;
+		color|=c8;
+		color<<=4;
+		c8=PAL32C[i].B;
+		c8=c8>>4;
+		color|=c8;
+		copPtr=copSetColor(copPtr,i,color);
+	}
+
+	*copPtr++=offsetof(struct Custom, bplcon3);
+	*copPtr++=0x0200;
+
+	for(int i=0; i<32; i++)
+	{
+		USHORT color;
+		USHORT c8;
+		c8=PAL32C[i].R;
+		c8=c8&0x0F;
+		color=c8;
+		color<<=4;
+		c8=PAL32C[i].G;
+		c8=c8&0x0F;
+		color|=c8;
+		color<<=4;
+		c8=PAL32C[i].B;
+		c8=c8&0x0F;
+		color|=c8;
+		copPtr=copSetColor(copPtr,i,color);
+	}
+
+	*copPtr++=offsetof(struct Custom, bplcon3);
+	*copPtr++=0x0000;
+
+	copPtr = GenSplitScreen(copPtr, planes2);
+
+	*copPtr++=0xffff;
+	*copPtr++=0xfffe; // end copper list
+
+
+#else
 	printf("Init coppered blitter...\n");
 
 	ChunkFrames[0]=(UBYTE*)AllocVec(16000,MEMF_CHIP);
@@ -1457,11 +1705,15 @@ int main()
 
 	*copPtr++=0xffff;
 	*copPtr++=0xfffe; // end copper list
-
+#endif
 	printf("Precalc...");	
 	InitRotations();
+#ifdef CMODE_PAL32
+	InitXtab();
+#else
 	InitXtab(0);
 	InitXtab(1);
+#endif
 	InitRDataPool();
 	InitDitherColorTable();
 	printf("Ok\n");
@@ -1478,15 +1730,21 @@ int main()
 	old_mx=mxy;
 	old_my=mxy>>8;
 
+#ifdef CMODE_PAL32
+#else
 	custom->cop2lc=(ULONG)copper2[0];
 	custom->copcon=0x0002;
+#endif
 
 	WaitVbl();
 	custom->cop1lc = (ULONG)copper1;
 	custom->dmacon = DMAF_BLITTER;//disable blitter dma for copjmp bug
 	custom->copjmp1 = 0x7fff; //start coppper
+#ifdef CMODE_PAL32
+	custom->dmacon = DMAF_SETCLR | DMAF_BLITHOG | DMAF_MASTER | DMAF_RASTER | DMAF_COPPER | DMAF_BLITTER;
+#else
 	custom->dmacon = DMAF_SETCLR | /*DMAF_BLITHOG | */DMAF_MASTER | DMAF_RASTER | DMAF_COPPER | DMAF_BLITTER;
-
+#endif
 	// Go!
 	SetInterruptHandler((APTR)interruptHandler);
 	SetInterruptHandler2((APTR)interruptHandler2);
@@ -1502,7 +1760,7 @@ int main()
 	{
 	//Set 1 for accurate profiling
 	//Set 0 for async engine run (better for play)
-#if 0
+#if 1
 		short fc;
 		fc=frameCounter;
 		while(fc==frameCounter);
@@ -1525,7 +1783,9 @@ int main()
 		Profile(1);
 		ZeroChunkyScreen(ChunkFrames[0]);
 	#endif
+	#if 1
 		RenderWorld(cam);
+	#endif
 		Profile(253);
 		StartC2P();
 		Profile(254);
@@ -1551,10 +1811,15 @@ L_abort:
 	FreeBitMap(bitmap2);
 	FreeVec(MemoryPoolAligned16);
 	FreeVec(copper1);
+#ifdef CMODE_PAL32
+	FreeVec(ChunkFrame);
+	FreeVec(C2Pbuffer);
+#else
 	FreeVec(copper2[0]);
 	FreeVec(copper2[1]);
 	FreeVec(ChunkFrames[0]);
 	FreeVec(ChunkFrames[1]);
+#endif
 	render_time>>=8;
 	printf("render_time=%ld.%02ld\n",render_time/312,100*(render_time%312)/312);
 	printf("Mission complete!\n");
@@ -1594,6 +1859,7 @@ L_abort:
 		case 26: s="Wait for blitter"; break;
 		case 27: s="Render far faces"; break;
 		case 28: s="Tesselation"; break;
+		case 29: s="Tesselation (continue)"; break;
 		case 253: s="StartC2P"; break;
 		case 254: s="Debug"; break;
 		case 255: s="Complete"; p[1].scanline=p->scanline; break;

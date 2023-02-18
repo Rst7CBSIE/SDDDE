@@ -403,7 +403,20 @@ R_DATA** tmap_prepare(RFACE* f, R_DATA** pool)
         while (v);
         if (display_wires)
         {
-            DrawFaceEdges(wf->vertex, 0x30);
+#ifdef CMODE_PAL32
+            int c = 12;
+            if (wf->xmax & TSL_FLAG_NEAR)
+                c = 15;
+            else if (wf->xmax & TSL_FLAG_DIVIDE)
+                c = 30;
+#else
+            int c = 0x30;
+            if (wf->xmax & TSL_FLAG_NEAR)
+                c = 0x33;
+            else if (wf->xmax & TSL_FLAG_DIVIDE)
+                c = 0x3C;
+#endif
+            DrawFaceEdges(wf->vertex, c);
         }
         else
         {

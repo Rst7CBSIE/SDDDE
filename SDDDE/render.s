@@ -86,3 +86,5 @@ TRender_thr		=	8
 
 TSL_z_thr		=	0x480	| Z threshold for tesselation
 
+rearrange_tmap_innerloop	=	0
+
