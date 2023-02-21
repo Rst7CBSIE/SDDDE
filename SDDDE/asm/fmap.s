@@ -213,13 +213,7 @@ fmap_clip_yz:
 	and.w	#0x0001,d5
 	or.w	#LOG5_8,d5
 fmap_no_clip_yz:
-	.if unsigned_sy
 	move.w	(a6,d5.w*2),RVERTEX.sy(a1)
-	.else
-	move.w	(a6,d5.w*2),d5					|zoom*exp(log(y)-log(z))+XDISP_FP
-	add.w	#YDISP_FP-XDISP_FP,d5			|Коррекция
-	move.w	d5,RVERTEX.sy(a1)
-	.endif
 	bra.s	fmap_scoord_ok
 fmap_prep_loop:
 	move.l	a2,-(a7)			|free face	
@@ -259,22 +253,6 @@ fmap_not_max:
 	tst.l	a2
 	bne.s	fmap_prep_loop
 	move.l	a7,RDataPool_top
-|
-	.if	0
-	.extern	ClearChunkyScreenState
-	move.b	ClearChunkyScreenState,d0
-	cmp.b	#2,d0
-	beq.s	1f
-	Profile 26,d0
-2:
-	tst.b	ClearChunkyScreenState
-	beq.s	2b
-	btst.b  #14-8,0xDFF002
-3:
-	btst.b  #14-8,0xDFF002
-	bne.s	3b
-1:
-	.endif
 |
 	clr.l	d1
 	Profile 16,d0

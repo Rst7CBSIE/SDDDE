@@ -243,6 +243,22 @@ R_DATA** DestroyRFace(RFACE* f, R_DATA** pool)
 
 int max_pool_used;
 
+RFACE* TMAP_qhead;
+RFACE* TMAP_qtail;
+
+R_DATA** RenderTMAPQ(R_DATA** pool)
+{
+    TMAP_qtail->next = NULL;
+    if (TMAP_qhead)
+    {
+        RDBG("*** Send faces to tmap_prepare (pool=%d)\n", (int)(pool - RDataPool));
+        pool = tmap_prepare(TMAP_qhead, pool);
+        RDBG("*** pool after tmap_prepare = %d\n", (int)(pool - RDataPool));
+        TMAP_qtail = INIT_RFACEQ(TMAP_qhead);
+    }
+    return pool;
+}
+
 RFACE* CullingT_qhead;
 RFACE* CullingT_qtail;
 
@@ -388,8 +404,9 @@ R_DATA** CullingT(RFACE** tail, RFACE* f, R_DATA** pool)
 R_DATA** AddVertexesByY(RFACE* f, R_DATA** pool)
 {
     int N = 0;
-    RFACE* tout_qhead;
-    RFACE* fout = INIT_RFACEQ(tout_qhead);
+    //RFACE* tout_qhead;
+    //RFACE* fout = INIT_RFACEQ(tout_qhead);
+    RFACE* fout = TMAP_qtail;
     do
     {
         RVERTEX* vlast = f->vertex->prev;
@@ -476,9 +493,11 @@ R_DATA** AddVertexesByY(RFACE* f, R_DATA** pool)
     i = (int)(pool - RDataPool);
     if (i > max_pool_used)
         max_pool_used = i;
-    RDBG("Send %d far faces to tmap_prepare (pool=%d)\n", N, (int)(pool - RDataPool));
-    pool = tmap_prepare(tout_qhead, pool);
-    RDBG("\tpool used after = %d\n", (int)(pool - RDataPool));
+    TMAP_qtail = fout;
+    if (pool >= R_DATA_THR_near_faces)
+    {
+        pool = RenderTMAPQ(pool);
+    }
     return pool;
 }
 
@@ -623,8 +642,8 @@ R_DATA** SplitFaceByZ(RFACE* face_a, R_DATA** pool)
 
 R_DATA** AddVertexesByX(RFACE* f, R_DATA** pool)
 {
-    RFACE* xsplit_qhead;
-    RFACE* fout = INIT_RFACEQ(xsplit_qhead);
+    RFACE* fnext;
+    RFACE* fout = TMAP_qtail;
     int N = 0;
     do
     {
@@ -653,7 +672,7 @@ R_DATA** AddVertexesByX(RFACE* f, R_DATA** pool)
                 save_t2 -= vs2->z;
                 t2 = save_t2;
                 t1 = save_t1;
-                if (t1 < 0 && t2 < 0) break;
+                if (t1 <= 0 && t2 <= 0) break;
                 if ((t1 ^ t2) >= 0) continue; //Нет сечения
                 //Знак поменялся, нам надо посчитать точку
                 vd = &(*pool++)->v;
@@ -717,19 +736,28 @@ R_DATA** AddVertexesByX(RFACE* f, R_DATA** pool)
         fout->next = f;
         fout = f;
         N++;
-    } while ((f = f->next) != NULL);
-    fout->next = NULL;
-    int i;
-    i = (int)(pool - RDataPool);
-    if (i > max_pool_used)
-        max_pool_used = i;
-    if (i > R_DATA_THR_max_faces)
+        fnext = f->next;
+        int i;
+        i = (int)(pool - RDataPool);
+        if (i > max_pool_used)
+            max_pool_used = i;
+        if (pool > R_DATA_THR_faces)
+        {
+            TMAP_qtail = fout;
+            pool = RenderTMAPQ(pool);
+            fout = TMAP_qtail;
+            N = 0;
+        }
+    } while ((f = fnext) != NULL);
+    TMAP_qtail = fout;
+    if (pool > R_DATA_THR_near_faces)
     {
-        RDBG("******* TOO SMALL POOL *************\n");
+        RDBG("*** AddVertexesByX R_DATA_THR_near_faces cleanup (%d)\n", N);
+        pool = RenderTMAPQ(pool);
+        N = 0;
+    
     }
-    RDBG("Send %d far faces to tmap_prepare (pool=%d)\n", N, (int)(pool - RDataPool));
-    pool = tmap_prepare(xsplit_qhead, pool);
-    RDBG("\tpool used after = %d\n", (int)(pool - RDataPool));
+    RDBG("*** AddVertexesByX leave %d faces in output queue\n", N);
     return pool;
 }
 
@@ -873,6 +901,7 @@ R_DATA** SplitFaceByY(RFACE* face_a, R_DATA** pool)
         N++;
     L1:
         fnext = face_a->next;
+#if 0
         if (pool >= R_DATA_THR_faces)
         {
             fq->next = NULL;
@@ -883,6 +912,7 @@ R_DATA** SplitFaceByY(RFACE* face_a, R_DATA** pool)
             N = 0;
             RFLUSH();
         }
+#endif
     } while ((face_a = fnext) != NULL);
     fq->next = NULL;
     if (ysplit_qhead)
@@ -893,6 +923,146 @@ R_DATA** SplitFaceByY(RFACE* face_a, R_DATA** pool)
     return pool;
 }
 
+R_DATA** TesselateZ(RFACE* face_a, R_DATA** pool)
+{
+    RFACE* fq = TMAP_qtail;
+    RFACE* fnext;
+    int N = 0;
+    do
+    {
+        FIXP16 Z = TSL_Z_THR;
+        for (; Z; Z = (Z >> 1) + (Z >> 2) + (Z>>3))
+        {
+            RVERTEX* vs2;
+            RVERTEX* vs1;
+            vs2 = face_a->vertex;
+            vs1 = vs2->prev;
+            RFACE* face_b;
+            face_b = &(*pool++)->f;
+            face_b->T = face_a->T;
+            face_b->xmax = face_a->xmax;
+            RVERTEX* vlast_a = (RVERTEX*)face_a; //Последняя вершина грани a
+            RVERTEX* vlast_b = (RVERTEX*)face_b; //Последняя вершина грани b
+            do
+            {
+                FIXP16 t1, t2;
+                t1 = Z - vs1->z;
+                t2 = Z - vs2->z;
+                FIXP16 save_t2;
+                save_t2 = t2;
+                if ((t1 ^ t2) < 0)
+                {
+                    //Знак поменялся, нам надо посчитать точку и добавить ее в обе грани
+                    RVERTEX* vd1, * vd2;
+                    vd1 = &(*pool++)->v;
+                    vd2 = &(*pool++)->v;
+                    if (vs1->flags & vs2->flags & EDGE_DIVIDED)
+                    {
+                        vd1->flags = SCOORD_NOT_VALID | EDGE_DIVIDED; //Установим флаг невалидности sx/sy
+                        vd2->flags = SCOORD_NOT_VALID | EDGE_DIVIDED; //Установим флаг невалидности sx/sy
+                    }
+                    else
+                    {
+                        vd1->flags = SCOORD_NOT_VALID; //Установим флаг невалидности sx/sy
+                        vd2->flags = SCOORD_NOT_VALID; //Установим флаг невалидности sx/sy
+                    }
+                    if (save_t2 >= 0)
+                    {
+                        //Меняем
+                        FIXP16 t; t = t1; t1 = t2; t2 = t;
+                        RVERTEX* v; v = vs1; vs1 = vs2; vs2 = v;
+                    }
+                    UFIXP16* p1, * p2, * pd1, * pd2;
+                    p1 = &vs1->U;
+                    p2 = &vs2->U;
+                    pd1 = &vd1->U;
+                    pd2 = &vd2->U;
+                    int pcount = 5;
+                    FIXP32 t;
+                    t = t1;
+                    t2 = t1 - t2;
+                    t <<= 15;
+                    //t = (t + (t2 >> 1)) / t2;
+                    t = t / t2;
+                    do
+                    {
+                        FIXP16 b, d;
+                        b = *p1++;
+                        d = *p2++;
+                        d -= b;
+                        b = b + ((t * d /* + 0x4000*/) >> 15);
+                        *pd1++ = b;
+                        *pd2++ = b;
+                    } while (--pcount);
+                    if (save_t2 >= 0)
+                    {
+                        //Меняем назад
+                        vs2 = vs1;
+                    }
+                    vlast_a->next = vd1;
+                    vlast_a = vd1;
+                    vlast_b->next = vd2;
+                    vlast_b = vd2;
+                }
+                if (save_t2 >= 0)
+                {
+                    //Отправляем в грань a
+                    vlast_a->next = vs2;
+                    vlast_a = vs2;
+                }
+                else
+                {
+                    //Отправляем в грань b
+                    vlast_b->next = vs2;
+                    vlast_b = vs2;
+                }
+                vs1 = vs2;
+            } while ((vs2 = vs2->next) != NULL);
+            //Все, мы все прошли, теперь тест, не надо ли вернуть пустые грани в пул
+            if (vlast_b != (RVERTEX*)face_b)
+            {
+                vlast_b->next = NULL;
+                //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+                face_b->vertex->prev = vlast_b;
+                //pool = AddVertexesByX(fout, face_b, pool);
+                //RDBG("\t\t\tsplitted...\n");
+                fq->next = face_b;
+                fq = face_b;
+                N++;
+            }
+            else
+            {
+                //Грань а пуста
+                *--pool = (R_DATA*)face_b; //Возвращаем в пул грань
+            }
+            if (vlast_a != (RVERTEX*)face_a)
+            {
+                //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+                vlast_a->next = NULL;
+                face_a->vertex->prev = vlast_a;
+            }
+            else
+            {
+                //Грань а пуста, а значит нам больше нечего резать
+                *--pool = (R_DATA*)face_a; //Возвращаем в пул грань
+                goto L1;
+            }
+        }
+        //Добавляем остатки грани на выход
+        fq->next = face_a;
+        fq = face_a;
+        N++;
+    L1:
+        fnext = face_a->next;
+    } while ((face_a = fnext) != NULL);
+    fq->next = NULL;
+    TMAP_qtail = fq;
+    RDBG("Send %d faces to TMAP\n", N);
+    pool = RenderTMAPQ(pool);
+    return pool;
+}
+
+#if 1
 //Render all textured faces from sort queue
 R_DATA** RenderT(TFACE **Q, R_DATA** pool, int Z)
 {
@@ -953,6 +1123,10 @@ R_DATA** RenderT(TFACE **Q, R_DATA** pool, int Z)
     far_f->next = NULL;
     mid_f->next = NULL;
     near_f->next = NULL;
+    //Init TMAP_q
+    TMAP_qtail = INIT_RFACEQ(TMAP_qhead);
+    //
+    RDBG("============ FAR faces ===========\n");
     RFACE* RenderT_qhead;
     RFACE* fout;
     //Now simple cull and draw far_f
@@ -995,13 +1169,9 @@ R_DATA** RenderT(TFACE **Q, R_DATA** pool, int Z)
         {
             RDBG("Send %d far faces to CullingT\n", N);
             fout->next = NULL;
-            CullingT_qtail = INIT_RFACEQ(CullingT_qhead);
-            pool = CullingT(&CullingT_qtail, RenderT_qhead, pool);
-            if (CullingT_qhead)
-            {
-                RDBG("Send %d far faces to tmap_prepare\n", N);
-                pool = tmap_prepare(CullingT_qhead, pool);
-            }
+            //CullingT_qtail = INIT_RFACEQ(CullingT_qhead);
+            pool = CullingT(&TMAP_qtail, RenderT_qhead, pool);
+            pool = RenderTMAPQ(pool);
             fout = INIT_RFACEQ(RenderT_qhead);
             N = 0;
         }
@@ -1010,17 +1180,13 @@ R_DATA** RenderT(TFACE **Q, R_DATA** pool, int Z)
     if (RenderT_qhead)
     {
         RDBG("Send %d far faces to CullingT (cleanup)\n",N);
-        CullingT_qtail = INIT_RFACEQ(CullingT_qhead);
-        pool = CullingT(&CullingT_qtail, RenderT_qhead, pool);
-        if (CullingT_qhead)
-        {
-            RDBG("Send %d far faces to tmap_prepare (cleanup)\n",N);
-            pool = tmap_prepare(CullingT_qhead, pool);
-        }
-        fout = INIT_RFACEQ(RenderT_qhead);
+        pool = CullingT(&TMAP_qtail, RenderT_qhead, pool);
     }
     //Now split all mid-faces
+    RDBG("============ MID faces ===========\n");
     NF_qtail = INIT_RFACEQ(NF_qhead);
+    NF_qtail->next = NULL;
+    fout = INIT_RFACEQ(RenderT_qhead);
     N = 0;
     for (face = mid_qhead; face; face = face->next)
     {
@@ -1075,13 +1241,7 @@ R_DATA** RenderT(TFACE **Q, R_DATA** pool, int Z)
     }
     RFLUSH();
     //Work with near faces
-    NF_qtail->next = NULL;
-    if (NF_qhead)
-    {
-        RDBG("Send %d near faces to SplitFaceByY (precleanup, pool=%d)\n", N, (int)(pool - RDataPool));
-        pool = SplitFaceByY(NF_qhead, pool);
-        NF_qtail = INIT_RFACEQ(NF_qhead);
-    }
+    RDBG("============ NEAR faces ===========\n");
     N = 0;
     fout = INIT_RFACEQ(RenderT_qhead);
     for (face = near_qhead; face; face = face->next)
@@ -1144,10 +1304,173 @@ R_DATA** RenderT(TFACE **Q, R_DATA** pool, int Z)
         RDBG("Send %d near faces to SplitFaceByY (cleanup, pool=%d)\n", N, (int)(pool - RDataPool));
         pool = SplitFaceByY(NF_qhead, pool);
     }
+    pool = RenderTMAPQ(pool);
     //All done!
     FinishRenderSlices();
     return pool;
 }
+#else
+//Render all textured faces from sort queue
+R_DATA** RenderT(TFACE** Q, R_DATA** pool, int Z)
+{
+    TFACE* face;
+    max_pool_used = 0;
+    //Init TMAP_q
+    TMAP_qtail = INIT_RFACEQ(TMAP_qhead);
+    TMAP_qtail->next = NULL;
+    RDBG("============ FAR faces ===========\n");
+    RFACE* RenderT_qhead;
+    RFACE* fout;
+    //Now simple cull and draw far_f
+    int N = 0;
+    fout = INIT_RFACEQ(RenderT_qhead);
+    int near_flag = 0;
+    do
+    {
+        Z--;
+        face = Q[Z];
+        for (; face; face = face->next)
+        {
+            RFACE* f;
+            RVERTEX* vlast;
+            RVERTEX* v;
+            //Создаем RFACE
+            f = &(*pool++)->f;
+            f->T = (((uint32_t)(face->T - Texture) /* + (blend << 17)*/) >> 1) + 0x80000001;
+            f->xmax = face->flags;
+            //Преобразуем в список RVERTEX
+            vlast = (RVERTEX*)f;
+            FIXP16 min_z, max_z;
+            min_z = 0x7FFF;
+            max_z = 0x0000;
+            for (TVERTEX* tv = face->vertexes; tv->p; tv++)
+            {
+                v = &(*pool++)->v;
+                v->U = tv->U;
+                v->V = tv->V;
+                FPXYZ* p;
+                p = tv->p;
+                v->x = p->x;
+                v->y = p->y;
+                v->z = p->z;
+                FIXP16 z;
+                z = p->z;
+                if (z > max_z) max_z = z;
+                if (z < min_z) min_z = z;
+                v->flags = p->flags & 1;
+                v->sx = p->sx;
+                v->sy = p->sy;
+                vlast->next = v;
+                vlast = v;
+            }
+            vlast->next = NULL;
+            //Установим правильные next/prev только для первого и последнего элемента, они нам будут нужны в синагоне
+            f->vertex->prev = vlast;
+            if (near_flag)
+            {
+                //Add to NF queue
+                N++;
+                fout->next = f;
+                fout = f;
+                if (pool >= R_DATA_THR_faces)
+                {
+                    fout->next = NULL;
+                    RDBG("Send %d near faces to CullingT (pool=%d)\n", N, (int)(pool - RDataPool));
+                    RFLUSH();
+                    CullingT_qtail = INIT_RFACEQ(CullingT_qhead);
+                    pool = CullingT(&CullingT_qtail, RenderT_qhead, pool);
+                    RFLUSH();
+                    if (CullingT_qhead)
+                    {
+                        RDBG("Send %d near faces to TesselateZ (pool=%d)\n", N, (int)(pool - RDataPool));
+                        RFLUSH();
+                        pool = TesselateZ(CullingT_qhead, pool);
+                        RFLUSH();
+                    }
+                    fout = INIT_RFACEQ(RenderT_qhead);
+                    N = 0;
+                }
+            }
+            else if (min_z < TSL_Z_THR)
+            {
+                //First near face
+                fout->next = NULL;
+                if (RenderT_qhead)
+                {
+                    RDBG("Send %d far faces to CullingT (last call)\n", N);
+                    RFLUSH();
+                    pool = CullingT(&TMAP_qtail, RenderT_qhead, pool);
+                    RFLUSH();
+                }
+                fout = INIT_RFACEQ(RenderT_qhead);
+                RDBG("============ NEAR faces ===========\n");
+                RFLUSH();
+                fout->next = f;
+                fout = f;
+                N = 1;
+                near_flag = 1;
+            }
+            else
+            {
+                N++;
+                fout->next = f;
+                fout = f;
+                if (pool >= R_DATA_THR_faces)
+                {
+                    RDBG("Send %d far faces to CullingT\n", N);
+                    fout->next = NULL;
+                    //CullingT_qtail = INIT_RFACEQ(CullingT_qhead);
+                    RFLUSH();
+                    pool = CullingT(&TMAP_qtail, RenderT_qhead, pool);
+                    RFLUSH();
+                    pool = RenderTMAPQ(pool);
+                    RFLUSH();
+                    fout = INIT_RFACEQ(RenderT_qhead);
+                    N = 0;
+                }
+            }
+        }
+    }
+    while (Z);
+    RDBG("============ RenderT cleanup ===========\n");
+    RFLUSH();
+    fout->next = NULL;
+    if (!near_flag)
+    {
+        if (RenderT_qhead)
+        {
+            RDBG("Send %d near faces to CullingT\n", N);
+            RFLUSH();
+            pool = CullingT(&TMAP_qtail, RenderT_qhead, pool);
+        }
+    }
+    else
+    {
+        if (RenderT_qhead)
+        {
+            RDBG("Send %d near faces to CullingT (pool=%d)\n", N, (int)(pool - RDataPool));
+            RFLUSH();
+            CullingT_qtail = INIT_RFACEQ(CullingT_qhead);
+            pool = CullingT(&CullingT_qtail, RenderT_qhead, pool);
+            RFLUSH();
+            if (CullingT_qhead)
+            {
+                RDBG("Send %d near faces to TesselateZ (pool=%d)\n", N, (int)(pool - RDataPool));
+                RFLUSH();
+                pool = TesselateZ(CullingT_qhead, pool);
+            }
+            RFLUSH();
+        }
+    }
+    RFLUSH();
+    pool = RenderTMAPQ(pool);
+    //All done!
+    RFLUSH();
+    FinishRenderSlices();
+    RFLUSH();
+    return pool;
+}
+#endif
 
 R_DATA** fmap(RFACE* f, R_DATA** pool)
 {

@@ -262,15 +262,15 @@ typedef union
     RFACE f;
 }R_DATA;
 
-#define R_DATA_TOTAL_SZ (512)
+#define R_DATA_TOTAL_SZ (1024)
 
 extern R_DATA* RDataPool[R_DATA_TOTAL_SZ];
 
 //#define R_DATA_THR_force_draw (RDataPool+64)
-#define R_DATA_THR_faces (RDataPool+192)
-#define R_DATA_THR_near_faces (RDataPool+30)
+#define R_DATA_THR_faces (RDataPool+670)
+#define R_DATA_THR_near_faces (RDataPool+105)
 //#define R_DATA_THR_clip (R_DATA_THR_faces+128)
-#define R_DATA_THR_max_faces (280)
+#define R_DATA_THR_max_faces (980)
 #define R_DATA_THR_error (RDataPool+R_DATA_THR_max_faces)
 
 R_DATA** tmap_prepare(RFACE* f, R_DATA** pool);

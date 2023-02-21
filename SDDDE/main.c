@@ -959,6 +959,11 @@ void RenderWorld(CAMERA *cam)
 	DBG(0x000);
 	Profile(8);
 	//PrepareAllRenderSequence();
+#ifdef CMODE_PAL32
+	Profile(26);
+	(void)(custom->dmaconr);
+	while(custom->dmaconr & (1<<14));
+#endif
 	Profile(9);
 	RenderF();
 	if (RDataPool_top!=RDataPool)
@@ -1045,6 +1050,14 @@ void StartC2P(void)
 	p=WorkPlanes;
 	WorkPlanes=ShowPlanes;
 	ShowPlanes=p;
+	//Wait blitter
+	(void)(custom->dmaconr);
+	while(custom->dmaconr & (1<<14));
+	custom->bltdpt=ChunkFrame;
+	custom->bltdmod=0;
+	custom->bltcon1=0;
+	custom->bltcon0=DEST;
+	custom->bltsize=(200<<6)|40; //w=80 h=100
 }
 
 #else
@@ -1778,11 +1791,14 @@ int main()
 		CacheClearU();
 		//custom->color[0]=0x600;
 		//ClearChunkyScreen(ChunkFrames[0]);
+#ifdef CMODE_PAL32
+#else
 	#ifdef CLEAR_CHUNKY_BY_BLITTER
 	#else
 		Profile(1);
 		ZeroChunkyScreen(ChunkFrames[0]);
 	#endif
+#endif
 	#if 1
 		RenderWorld(cam);
 	#endif
@@ -1847,7 +1863,7 @@ L_abort:
 		case 14: s="fmap culling"; break;
 		case 15: s="fmap scoords"; break;
 		case 16: s="fmap faceloop"; break;
-		case 17: s="tmap section"; break;
+		case 17: s="tmap culling"; break;
 		case 18: s="tmap scoords"; break;
 		case 19: s="tmap faceloop"; break;
 		case 20: s="trapezoids begin"; break;
@@ -1857,9 +1873,18 @@ L_abort:
 		case 24: s="Filled render cleanup"; break;
 		case 25: s="Textured render cleanup"; break;
 		case 26: s="Wait for blitter"; break;
-		case 27: s="Render far faces"; break;
-		case 28: s="Tesselation"; break;
-		case 29: s="Tesselation (continue)"; break;
+		case 27: s="Prepare far faces"; break;
+		case 28: s="Cleanup far faces"; break;
+		case 29: s="Prepare mid faces"; break;
+		case 30: s="SplitFaceByZ"; break;
+		case 31: s="AddVertexesByY"; break;
+		case 32: s="Cleanup rest of far faces"; break;
+		case 33: s="Prepare near faces"; break;
+		case 34: s="SplitFaceByY"; break;
+		case 35: s="AddVertexesByX"; break;
+		case 36: s="SplitFaceByY (continue)"; break;
+		case 37: s="Cleanup mid faces"; break;
+		case 38: s="Cleanup near faces"; break;
 		case 253: s="StartC2P"; break;
 		case 254: s="Debug"; break;
 		case 255: s="Complete"; p[1].scanline=p->scanline; break;

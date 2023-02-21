@@ -28,9 +28,7 @@ ZeroChunkyScreen:
 	.globl	XtabCorrect_ys
 	.type	XtabCorrect_ys, @function
 XtabCorrect_ys:	
-	.if unsigned_sy
 	sub.w	#30*2,a0
-	.endif
 	rts
 
 	.align	4
@@ -723,18 +721,8 @@ clip_yz:
 	or.w	#LOG5_8,d1
 no_clip_yz:
 	move.w	d3,FPXYZ.flags(a0)
-	.if unsigned_sy
 	move.w	(a2,d1.w*2),FPXYZ.sy(a0)
-	.else
-	move.w	(a2,d1.w*2),d1				|zoom*exp(log(y)-log(z))+XDISP_FP
-	add.w	#YDISP_FP-XDISP_FP,d1		|correct y disp
-|	bmi.s	1f
-	move.w	d1,FPXYZ.sy(a0)
-	.endif
 	bra.w	PointCoordOk
-1:
-	move.l	d1,d1
-	bra.s	1b
 |======================================================================================
 | Stage 2
 |======================================================================================
@@ -750,13 +738,8 @@ UpdateFace_stage2:
 	beq.s	NoUpdateFace_stage2
 |d1 - llllbbbb bound
 |d2 - rrrrtttt bound
-	.if unsigned_sy
 	move.l	#0x9FFD63FD+0x1E00,d1
 	move.l	#0x00020002+0x1E00,d2
-	.else
-	move.l	#0x9FFD63FD,d1
-	move.l	#0x00020002,d2
-	.endif
 	bra.s	UpdateFaceLoop_stage2
 skip_face:
 	move.l	TFACE.next(a6),a6
@@ -829,6 +812,8 @@ box_r_ok:
 	add.w	(a1),d0
 	sub.l	a5,a2
 	add.w	(a2),d0
+|	cmp.w	#0x400,d0
+|	bcc.s	1f
 	move.w	d0,TFACE.avg_z(a6)
 	andi.w	#0x1F,d0
 	lea	sort_q1(pc,d0.w*4),a0
@@ -839,6 +824,8 @@ box_r_ok:
 	tst.l	a6
 	bne.w	UpdateFaceLoop_stage2
 	rts
+1:
+	bra.w	skip_face
 	.align	4
 	.globl	sort_q1
 sort_q1:
@@ -857,6 +844,8 @@ SortFaces:
 	move.l	d1,a1
 	move.w	TFACE.avg_z(a1),d1		|avg_z
 	lsr.w	#5,d1
+|	cmp.w	#32,d1
+|	bcc.s	4f
 	lea	sort_q2(pc,d1.w*4),a2
 	move.l	TFACE.next(a1),d1		|tnext
 	move.l	(a2),TFACE.next(a1)
@@ -867,6 +856,8 @@ SortFaces:
 	dbra	d0,1b
 	movem.l	(a7)+,a2
 	rts
+4:
+	bra.s	4b
 	.align	4
 	.globl	sort_q2
 sort_q2:

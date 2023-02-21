@@ -289,8 +289,16 @@ uint32_t* TrapezoidsToSlices(uint32_t* in)
                     *wp++ = ((in * dVv) >> 9) & 0x00FFFFFF;
 #else
                     *wp++ = UVt;
-                    *wp++ = ((in * dUu) >> 7) & 0x00FFFFFF;
-                    *wp++ = ((in * dVv) >> 7) & 0x00FFFFFF;
+                    if (test_mode2)
+                    {
+                        *wp++ = ((in * dUu) >> 7) & 0x00FFFF00;
+                        *wp++ = ((in * dVv) >> 7) & 0x00FFFF00;
+                    }
+                    else
+                    {
+                        *wp++ = ((in * dUu) >> 7) & 0x00FFFFFF;
+                        *wp++ = ((in * dVv) >> 7) & 0x00FFFFFF;
+                    }
 #endif
                     *wp++ = D + t;
                     if (wp > SlicesBuffer_error)

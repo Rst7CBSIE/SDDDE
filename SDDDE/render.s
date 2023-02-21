@@ -77,10 +77,10 @@ enable_distance_test	=	0
 enable_backface_test	=	1
 
 enable_trapezoids_round	=	0
-unsigned_sy		=	1
 
 	.extern	RDataPool
-R_DATA_THR_faces	=	RDataPool+192*4
+R_DATA_THR_faces		=	RDataPool+670*4
+R_DATA_THR_near_faces	=	RDataPool+105*4
 
 TRender_thr		=	8
 
@@ -88,3 +88,4 @@ TSL_z_thr		=	0x480	| Z threshold for tesselation
 
 rearrange_tmap_innerloop	=	0
 
+tmap_16bit		=		1

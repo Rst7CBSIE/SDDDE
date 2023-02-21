@@ -139,18 +139,10 @@ typedef union
     RFACE f;
 }R_DATA;
 
-#define R_DATA_TOTAL_SZ (280)
+#define R_DATA_TOTAL_SZ (1024)
 extern R_DATA* RDataPool[R_DATA_TOTAL_SZ];
 extern R_DATA** RDataPool_top;
-#define R_DATA_THR_faces (RDataPool+192)
 
-//static inline RFACE *AllocRFACE(void) {return &((*RDataPool_top++)->f);}
-//static inline RVERTEX *AllocRVERTEX(void) {return &((*RDataPool_top++)->v);}
-#define AllocRFACE() (&((*local_RDataPool_top++)->f))
-#define AllocRVERTEX() (&((*local_RDataPool_top++)->v))
-
-//static inline void FreeRData(void *d) {*--RDataPool_top=(R_DATA*)d;}
-//static inline RVERTEX *PeekRVERTEX(void) {return &((*RDataPool_top)->v);}
 extern ULONG *TRAPEZOIDS_POINTER;
 extern ULONG *SLICES_POINTER;
 extern ULONG SLICES_BUFFER[];
