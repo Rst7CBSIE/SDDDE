@@ -133,6 +133,7 @@ uint32_t* collision_list;
 
 static TFACE* collided_face;
 
+#if 0
 FIXP32 SD2leaf(FIXP32 X, FIXP32 Y, FIXP32 Z)
 {
     DBG("*** SD2leaf ***\n");
@@ -157,8 +158,12 @@ FIXP32 SD2leaf(FIXP32 X, FIXP32 Y, FIXP32 Z)
         yp = Y - p->Y;
         zp = Z - p->Z;
         //Сразу чекнем сторону
-        //d = xp * face->A14 + yp * face->B14 + zp * face->C14;
-        //if (d < 0) continue;
+        d = xp * face->A14 + yp * face->B14 + zp * face->C14;
+        d >>= 14;
+        if (d < 0) continue;
+        if (d > MIN_D_WALK * 2)
+            continue;
+        DBG("\tTest with d=%d\n", d);
         do
         {
             FPXYZ* pp;
@@ -221,8 +226,7 @@ FIXP32 SD2leaf(FIXP32 X, FIXP32 Y, FIXP32 Z)
             }
             //DBG("\t...Camera inside...\n");
         } while (v);
-        d = xp * face->A14 + yp * face->B14 + zp * face->C14;
-        d >>= 14;
+        //d = xp * face->A14 + yp * face->B14 + zp * face->C14;
         d = d * d;
     L_brk:
         //DBG("d=%08X\n", d);
@@ -236,6 +240,93 @@ FIXP32 SD2leaf(FIXP32 X, FIXP32 Y, FIXP32 Z)
     }
     return min_d;
 }
+#else
+FIXP32 SD2leaf(FIXP32 X, FIXP32 Y, FIXP32 Z)
+{
+    DBG("*** SD2leaf ***\n");
+    collided_face = NULL;
+    KDTREE_NODE* node = FindKDtreeNode(X, Y, Z);
+    uint32_t index = (uint32_t)(node - kd_tree);
+    uint32_t* p = (uint32_t*)((size_t)collision_list + collision_index[index]);
+    FIXP32 min_d;
+    min_d = INT32_MAX;
+    while ((index = *p++) != 0)
+    {
+        TFACE* face;
+        face = GetFaceByOffset(index - 1);
+        DBGF(face); DBG("\n");
+        FIXP32 x, y, z;
+        FPXYZ* p;
+        TVERTEX* v = face->vertexes;
+        p = v->p;
+        FIXP32 xa, xp, ya, yp, za, zp;
+        FIXP32 d;
+        xp = X - p->X;
+        yp = Y - p->Y;
+        zp = Z - p->Z;
+        //Сразу чекнем сторону
+        d = xp * face->A14 + yp * face->B14 + zp * face->C14;
+        d >>= 14;
+        DBG("\tDistance to face %d\n", d);
+        if (d < 0) continue;
+        if (d >= MIN_D_WALK * 2)
+            continue; //Next face
+        d = d * d;
+        do
+        {
+            FPXYZ* pp;
+            pp = p;
+            xa = p->X;
+            ya = p->Y;
+            za = p->Z;
+            v++;
+            p = v->p;
+            if (!p)
+            {
+                v = face->vertexes;
+                p = v->p;
+                v = NULL;
+            }
+            xa -= p->X;
+            ya -= p->Y;
+            za -= p->Z;
+
+            xp += xa;
+            yp += ya;
+            zp += za;
+
+            x = ya * face->C14 - za * face->B14;
+            y = za * face->A14 - xa * face->C14;
+            z = xa * face->B14 - ya * face->A14;
+
+            x >>= 14;
+            y >>= 14;
+            z >>= 14;
+
+            FIXP32 d2;
+
+            if ((d2 = x * xp + y * yp + z * zp) < 0)
+            {
+                FIXP32 R;
+                R = x * x + y * y + z * z;
+                d2 = (FIXP64)d2 * d2 / R;
+                DBG("\t\t...Camera outside (d2=%d, R=%d)...\n", isqrt(d2), isqrt(R));
+                d += d2;
+                goto L_brk;
+            }
+        } while (v);
+    L_brk:
+        if (d < min_d)
+        {
+            min_d = d;
+            DBG("\tNew min_d = %08X\n", min_d);
+            collided_face = face;
+        }
+        ;
+    }
+    return min_d;
+}
+#endif
 
 static inline FIXP32 AsrDecay(FIXP32 v)
 {

@@ -1079,6 +1079,8 @@ R_DATA** RenderT(TFACE **Q, R_DATA** pool, int Z)
 
     max_pool_used = 0;
 
+    int stop_far_flag = 0;
+
     do
     {
         Z--;
@@ -1097,8 +1099,9 @@ R_DATA** RenderT(TFACE **Q, R_DATA** pool, int Z)
                 if (z > max_z) max_z = z;
                 if (z < min_z) min_z = z;
             }
-            if (min_z < TSL_Z_THR)
+            if (min_z < TSL_Z_THR || stop_far_flag)
             {
+                stop_far_flag = 1;
                 if (max_z < TSL_Z_THR)
                 {
                     face->flags |= TSL_FLAG_NEAR;
