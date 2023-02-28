@@ -40,6 +40,25 @@ SD2leaf_face_loop:
 |    zp = Z - p->Z;
 	sub.l	(a2),a5
 |
+| Test distance to face
+|
+	movem.l	TFACE.flags(a0),d0/d1		|d0=...A14 d1=B14C14
+	move.l	a3,d4
+	muls.w	d0,d4
+	move.l	a5,d0
+	muls.w	d1,d0
+	add.l	d0,d4
+	swap	d1
+	move.l	a4,d0
+	muls.w	d1,d0
+	add.l	d0,d4
+	bmi.w	SDIleaf_next_face
+	moveq	#15,d3
+	lsr.l	d3,d4
+	cmp.w	#256/2+64,d4			| MIN_D_WALK * 2
+	bcc.w	SDIleaf_next_face
+	move.l	d4,-(a7)
+|
 | d4,d5,d6 - xa, ya, za
 |
 SD2leaf_vertex_loop:
@@ -150,24 +169,15 @@ SD2leaf_vertex_loop:
 | } while (v);
 	tst.l	a1
 	bne.w	SD2leaf_vertex_loop
-	movem.l	TFACE.flags(a0),d0/d1		|d0=...A14 d1=B14C14
-	move.l	a3,d4
-	muls.w	d0,d4
-	move.l	a5,d0
-	muls.w	d1,d0
-	add.l	d0,d4
-	swap	d1
-	move.l	a4,d0
-	muls.w	d1,d0
-	add.l	d0,d4
-	moveq	#15,d3
-	asr.l	d3,d4
+	move.l	(a7),d4
 	muls.w	d4,d4
 3:
 	cmp.l	d4,d7
 	bcs.s	1f
 	move.l	d4,d7
 1:
+	addq.l	#4,a7
+SDIleaf_next_face:
 	move.l	(a6)+,a0
 	tst.l	a0
 	bne.w	SD2leaf_face_loop

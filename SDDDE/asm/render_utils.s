@@ -11,18 +11,47 @@ ClearChunkyScreen:
 1:
 	move.l	d1,(a0)+
 	dbra	d0,1b
+	rts
 
 	.align	4
 	.globl	ZeroChunkyScreen
 	.type	ZeroChunkyScreen, @function
 ZeroChunkyScreen:
 	move.l	4(a7),a0
-	move.w	#16000/4-1,d0
-	moveq.l	#0,d1
-	|move.l	#0xC000C000,d1		| R=1 G=1 B=2
+	movem.l	d0-d7/a2-a6,-(a7)
+	moveq.l	#40,d0
+	move.w	#16000/40-1,d1
+	moveq.l	#0,d2
+	moveq.l	#0,d3
+	moveq.l	#0,d4
+	moveq.l	#0,d5
+	moveq.l	#0,d6
+	moveq.l	#0,d7
+	move.l	d7,a2
+	move.l	d7,a3
+	move.l	d7,a4
+	move.l	d7,a5
 1:
-	move.l	d1,(a0)+
-	dbra	d0,1b
+	movem.l	d2-d7/a2-a5,(a0)
+	add.l	d0,a0
+	dbra	d1,1b
+	movem.l	(a7)+,d0-d7/a2-a6
+	rts
+
+	.align	4
+	.globl	CopyChunkFromC2P
+	.type	CopyChunkFromC2P, @function
+CopyChunkFromC2P:
+	movem.l	d0-d7/a2-a6,-(a7)
+	moveq	#40,d0
+	move.w	#4*100-1,d1
+1:
+	movem.l	(a1)+,d2-d7/a2-a5
+	movem.l	d2-d7/a2-a5,(a0)
+	add.l	d0,a0
+	dbra	d1,1b
+	movem.l	(a7)+,d0-d7/a2-a6
+	rts
 
 	.align	4
 	.globl	XtabCorrect_ys

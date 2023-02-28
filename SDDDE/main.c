@@ -18,6 +18,12 @@
 //Use 32 colors mode
 #define CMODE_PAL32
 
+#ifdef CMODE_PAL32
+//Use only blitter for c2p in 32 colors mode
+//Better performance, but more lag (about +2 frames)
+//#define ONLY_BLITTER_C2P
+#endif
+
 //For loading SPYRO uncomment and change bm_sz_bits	= 7 in render_utils.s
 //#define LOAD_SPYRO
 
@@ -231,7 +237,7 @@ inline USHORT* copSetColor(USHORT* copListCurrent,USHORT index,USHORT color) {
 
 
 // set up a 320x256 lowres display
-inline USHORT* screenScanDefault(USHORT* copListEnd) 
+static inline USHORT* screenScanDefault(USHORT* copListEnd) 
 {
 	const USHORT x=129;
 	const USHORT width=320;
@@ -281,6 +287,8 @@ USHORT *GenSplitScreen(USHORT *copPtr, UBYTE **planes)
 	*copPtr++ = (0<<10)/*dual pf*/|(1<<9)/*color*/|(0<<11)/*ham*/|((1)<<12)/*num bitplanes*/|(1<<0)/*enable bplcon3*/;
 	return copPtr;
 }
+
+volatile USHORT* copJ2_position ALIGN4; //Poiters to trig copjmp2
 
 extern const UBYTE font[2048] ALIGN4;
 
@@ -921,6 +929,7 @@ static inline TFACE* DecrunchPVS(KDTREE_NODE *node)
 }
 
 volatile UBYTE ClearChunkyScreenState;
+volatile UBYTE C2Pstate;
 
 void SortFaces(void);
 void PrepareSortFaces(void);
@@ -959,11 +968,6 @@ void RenderWorld(CAMERA *cam)
 	DBG(0x000);
 	Profile(8);
 	//PrepareAllRenderSequence();
-#ifdef CMODE_PAL32
-	Profile(26);
-	(void)(custom->dmaconr);
-	while(custom->dmaconr & (1<<14));
-#endif
 	Profile(9);
 	RenderF();
 	if (RDataPool_top!=RDataPool)
@@ -990,10 +994,8 @@ void RenderWorld(CAMERA *cam)
 L_end:
 }
 
-#ifdef CMODE_PAL32
-
-UBYTE *ChunkFrame ALIGN4;
-UBYTE *Xtab[160] ALIGN4;
+UBYTE *FastChunkFrame ALIGN4;
+UBYTE *Xtab_fast[160] ALIGN4;
 
 static inline UBYTE *XtabCorrect_ysC(UBYTE *s)
 {
@@ -1002,12 +1004,30 @@ static inline UBYTE *XtabCorrect_ysC(UBYTE *s)
 	return (UBYTE*)_a0;
 }
 
+#ifdef CMODE_PAL32
+
+UBYTE *ShowPlanes ALIGN4;
+UBYTE *WorkPlanes ALIGN4;
+UBYTE *C2Pbuffer ALIGN4;
+
+USHORT WorkChunkFrameN=0;
+USHORT C2PsourceN;
+
+UBYTE *ChunkFrames[2] ALIGN4;
+UBYTE *Xtab[160*2] ALIGN4;
+
+UBYTE **Xtabs[2] ALIGN4=
+{
+	Xtab+0,
+	Xtab+160
+};
+
 __attribute__((optimize("Os")))
 __attribute__((noinline))
-void InitXtab(void)
+void InitXtab(int N)
 {
-	UBYTE **p=Xtab;
-	UBYTE *s = ChunkFrame;
+	UBYTE **p=Xtabs[N];
+	UBYTE *s = ChunkFrames[N];
 	s=XtabCorrect_ysC(s);
 	USHORT i;
 	i=20;
@@ -1028,17 +1048,391 @@ void InitXtab(void)
 	while (--i);
 }
 
-UBYTE *ShowPlanes ALIGN4;
-UBYTE *WorkPlanes ALIGN4;
+__attribute__((optimize("Os")))
+__attribute__((noinline))
+void InitXtab_fast(void)
+{
+	if (!FastChunkFrame) return;
+	UBYTE **p=Xtab_fast;
+	UBYTE *s = FastChunkFrame;
+	s=XtabCorrect_ysC(s);
+	USHORT i;
+	i=20;
+	do
+	{
+		*p++=s;
+		*p++=s+8000;
+		*p++=s+4000;
+		*p++=s+12000;
 
-UBYTE *C2Pbuffer ALIGN4;
+		*p++=s+1;
+		*p++=s+8001;
+		*p++=s+4001;
+		*p++=s+12001;
+
+		s+=200;
+	} 
+	while (--i);
+}
+
+#ifdef ONLY_BLITTER_C2P
+
+
+USHORT *copper2[4] ALIGN4;
+
+#define SCR_HEIGHT (100)
+
+__attribute__((optimize("Os")))
+__attribute__((noinline))
+void CreateBlitterCList(int N)
+{
+	ULONG a;
+	USHORT *cp;
+	USHORT n;
+	//Prepare pass 1
+	cp=copper2[N*2+0];
+	//Prepare increment stage
+	*cp++=offsetof(struct Custom,bltcmod);
+	*cp++=200-2;
+	*cp++=offsetof(struct Custom,bltbmod);
+	*cp++=200-2;
+	*cp++=offsetof(struct Custom,bltdmod);
+	*cp++=0;
+	*cp++=offsetof(struct Custom,bltafwm);
+	*cp++=0xFFFF;
+	*cp++=offsetof(struct Custom,bltalwm);
+	*cp++=0xFFFF;
+	*cp++=offsetof(struct Custom,bltadat);
+	*cp++=0x3333;
+	*cp++=offsetof(struct Custom,bltcon0);
+	*cp++=SRCC | SRCB | DEST | (0<<ASHIFTSHIFT) | 0xCA; //term=AB + ~AC
+	*cp++=offsetof(struct Custom,bltcon1);
+	*cp++=(2<<BSHIFTSHIFT);
+	a=(ULONG)C2Pbuffer;
+	*cp++=offsetof(struct Custom,bltdpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltdpt)+2;
+	*cp++=a;
+	//Setup 100 blits
+	a=(ULONG)ChunkFrames[N];
+	n=SCR_HEIGHT;
+	do
+	{
+		*cp++=offsetof(struct Custom,bltcpt);
+		*cp++=a>>16;
+		*cp++=offsetof(struct Custom,bltcpt)+2;
+		*cp++=a;
+		a+=8000;
+		*cp++=offsetof(struct Custom,bltbpt);
+		*cp++=a>>16;
+		*cp++=offsetof(struct Custom,bltbpt)+2;
+		*cp++=a;
+		a-=8000;
+		*cp++=offsetof(struct Custom,bltsize);
+		*cp++=(40<<6)|1; //w=1 h=40
+		*cp++=0x0001; //CWAIT only blitter
+		*cp++=0x0000;
+		a+=2;
+	}
+	while(--n);
+	//Prepare decrement stage
+	*cp++=offsetof(struct Custom,bltadat);
+	*cp++=0xCCCC;
+	*cp++=offsetof(struct Custom,bltcon1);
+	*cp++=(2<<BSHIFTSHIFT) | BLITREVERSE;
+	a=(ULONG)C2Pbuffer;
+	a+=15998;
+	*cp++=offsetof(struct Custom,bltdpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltdpt)+2;
+	*cp++=a;
+	//Setup 100 blits
+	a=(ULONG)ChunkFrames[N];
+	a+=15998;
+	n=SCR_HEIGHT;
+	do
+	{
+		*cp++=offsetof(struct Custom,bltcpt);
+		*cp++=a>>16;
+		*cp++=offsetof(struct Custom,bltcpt)+2;
+		*cp++=a;
+		a-=8000;
+		*cp++=offsetof(struct Custom,bltbpt);
+		*cp++=a>>16;
+		*cp++=offsetof(struct Custom,bltbpt)+2;
+		*cp++=a;
+		a+=8000;
+		*cp++=offsetof(struct Custom,bltsize);
+		*cp++=(40<<6)|1; //w=1 h=40
+		*cp++=0x0001; //CWAIT only blitter
+		*cp++=0x0000;
+		a-=2;
+	}
+	while(--n);
+	//Decrement stage complete
+#ifdef CLEAR_CHUNKY_BY_BLITTER
+	if (!FastChunkFrame)
+	{
+		a=(ULONG)ChunkFrames[N];
+		*cp++=offsetof(struct Custom,bltdpt);
+		*cp++=a>>16;
+		*cp++=offsetof(struct Custom,bltdpt)+2;
+		*cp++=a;
+		*cp++=offsetof(struct Custom,bltcon0);
+		*cp++=DEST; //Clear
+		*cp++=offsetof(struct Custom,bltcon1);
+		*cp++=0;
+		*cp++=offsetof(struct Custom,bltsize);
+		*cp++=(200<<6)|40; //w=40 h=200
+		//*cp++=0x0001; //CWAIT only blitter
+		//*cp++=0x0000;
+		//Clear chunky screen in progress
+	}
+#endif
+	*cp++=offsetof(struct Custom,intreq);
+	*cp++=INTF_SETCLR | INTF_COPER;
+	cp = GenSplitScreen(cp, planes2);
+	*cp++=0xffff;
+	*cp++=0xfffe; // end copper list
+	printf("Coppered blitter pass 1 size = %ld\n",(cp-copper2[N*2+0])*sizeof(USHORT));
+	//Prepare pass 2
+	cp=copper2[N*2+1];
+	//Prepare increment stage
+	*cp++=offsetof(struct Custom,bltcmod);
+	*cp++=80-40;
+	*cp++=offsetof(struct Custom,bltbmod);
+	*cp++=80-40;
+	*cp++=offsetof(struct Custom,bltdmod);
+	*cp++=200-40;
+	*cp++=offsetof(struct Custom,bltafwm);
+	*cp++=0xFFFF;
+	*cp++=offsetof(struct Custom,bltalwm);
+	*cp++=0xFFFF;
+	*cp++=offsetof(struct Custom,bltadat);
+	*cp++=0x0F0F;
+	*cp++=offsetof(struct Custom,bltcon0);
+	*cp++=SRCC | SRCB | DEST | (0<<ASHIFTSHIFT) | 0xCA; //term=AB + ~AC
+	*cp++=offsetof(struct Custom,bltcon1);
+	*cp++=(4<<BSHIFTSHIFT);
+	//first half
+	a=(ULONG)C2Pbuffer;
+	*cp++=offsetof(struct Custom,bltcpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltcpt)+2;
+	*cp++=a;
+	a+=40;
+	*cp++=offsetof(struct Custom,bltbpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltbpt)+2;
+	*cp++=a;
+	if (N)
+		a=(ULONG)ShowPlanes;
+	else
+		a=(ULONG)WorkPlanes;
+	a+=0; //Bitplane 0
+	*cp++=offsetof(struct Custom,bltdpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltdpt)+2;
+	*cp++=a;
+	*cp++=offsetof(struct Custom,bltsize);
+	*cp++=(SCR_HEIGHT<<6)|20; //w=20 h=100
+	*cp++=0x0001; //CWAIT only blitter
+	*cp++=0x0000;
+	//second half
+	a=(ULONG)C2Pbuffer+8000;
+	*cp++=offsetof(struct Custom,bltcpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltcpt)+2;
+	*cp++=a;
+	a+=40;
+	*cp++=offsetof(struct Custom,bltbpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltbpt)+2;
+	*cp++=a;
+	if (N)
+		a=(ULONG)ShowPlanes;
+	else
+		a=(ULONG)WorkPlanes;
+	a+=40; //Bitplane 1
+	*cp++=offsetof(struct Custom,bltdpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltdpt)+2;
+	*cp++=a;
+	*cp++=offsetof(struct Custom,bltsize);
+	*cp++=(SCR_HEIGHT<<6)|20; //w=20 h=100
+	*cp++=0x0001; //CWAIT only blitter
+	*cp++=0x0000;
+	//Prepare decrement stage
+	*cp++=offsetof(struct Custom,bltadat);
+	*cp++=0xF0F0;
+	*cp++=offsetof(struct Custom,bltcon1);
+	*cp++=(4<<BSHIFTSHIFT) | BLITREVERSE;
+	//first half
+	a=(ULONG)C2Pbuffer;
+	a+=7998;
+	*cp++=offsetof(struct Custom,bltcpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltcpt)+2;
+	*cp++=a;
+	a-=40;
+	*cp++=offsetof(struct Custom,bltbpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltbpt)+2;
+	*cp++=a;
+	if (N)
+		a=(ULONG)ShowPlanes;
+	else
+		a=(ULONG)WorkPlanes;
+	a+=200*99+38+80; //End of bitplane 2
+	*cp++=offsetof(struct Custom,bltdpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltdpt)+2;
+	*cp++=a;
+	*cp++=offsetof(struct Custom,bltsize);
+	*cp++=(SCR_HEIGHT<<6)|20; //w=20 h=100
+	*cp++=0x0001; //CWAIT only blitter
+	*cp++=0x0000;
+	//second half
+	a=(ULONG)C2Pbuffer;
+	a+=7998+8000;
+	*cp++=offsetof(struct Custom,bltcpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltcpt)+2;
+	*cp++=a;
+	a-=40;
+	*cp++=offsetof(struct Custom,bltbpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltbpt)+2;
+	*cp++=a;
+	if (N)
+		a=(ULONG)ShowPlanes;
+	else
+		a=(ULONG)WorkPlanes;
+	a+=200*99+38+120; //End of bitplane 3
+	*cp++=offsetof(struct Custom,bltdpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltdpt)+2;
+	*cp++=a;
+	*cp++=offsetof(struct Custom,bltsize);
+	*cp++=(SCR_HEIGHT<<6)|20; //w=20 h=100
+	*cp++=0x0001; //CWAIT only blitter
+	*cp++=0x0000;
+	//Decrement stage complete
+	//Setup DUP stage
+	if (N)
+		a=(ULONG)ShowPlanes;
+	else
+		a=(ULONG)WorkPlanes;
+	a+=120; //Start of bitplane 3
+	*cp++=offsetof(struct Custom,bltcpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltcpt)+2;
+	*cp++=a;
+	*cp++=offsetof(struct Custom,bltbpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltbpt)+2;
+	*cp++=a;
+	a+=40; //Start of bitplane 4
+	*cp++=offsetof(struct Custom,bltdpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltdpt)+2;
+	*cp++=a;
+	*cp++=offsetof(struct Custom,bltcmod);
+	*cp++=200-40;
+	*cp++=offsetof(struct Custom,bltbmod);
+	*cp++=200-40;
+	*cp++=offsetof(struct Custom,bltadat);
+	*cp++=0x5555;
+	*cp++=offsetof(struct Custom,bltcon1);
+	*cp++=(1<<BSHIFTSHIFT);
+	*cp++=offsetof(struct Custom,bltsize);
+	*cp++=(SCR_HEIGHT<<6)|20; //w=20 h=100
+	*cp++=0x0001; //CWAIT only blitter
+	*cp++=0x0000;
+	//Dup stage second half
+	if (N)
+		a=(ULONG)ShowPlanes;
+	else
+		a=(ULONG)WorkPlanes;
+	a+=200*99+38+120; //End of of bitplane 3
+	*cp++=offsetof(struct Custom,bltcpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltcpt)+2;
+	*cp++=a;
+	*cp++=offsetof(struct Custom,bltbpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltbpt)+2;
+	*cp++=a;
+	*cp++=offsetof(struct Custom,bltdpt);
+	*cp++=a>>16;
+	*cp++=offsetof(struct Custom,bltdpt)+2;
+	*cp++=a;
+	*cp++=offsetof(struct Custom,bltcmod);
+	*cp++=200-40;
+	*cp++=offsetof(struct Custom,bltbmod);
+	*cp++=200-40;
+	*cp++=offsetof(struct Custom,bltadat);
+	*cp++=0xAAAA;
+	*cp++=offsetof(struct Custom,bltcon1);
+	*cp++=(1<<BSHIFTSHIFT) | BLITREVERSE;
+	*cp++=offsetof(struct Custom,bltsize);
+	*cp++=(SCR_HEIGHT<<6)|20; //w=20 h=100
+	*cp++=0x0001; //CWAIT only blitter
+	*cp++=0x0000;
+	//Dup stage complete
+	*cp++=offsetof(struct Custom,intreq);
+	*cp++=INTF_SETCLR | INTF_COPER;
+	cp = GenSplitScreen(cp, planes2);
+	*cp++=0xffff;
+	*cp++=0xfffe; // end copper list
+	printf("Coppered blitter pass 2 size = %ld\n",(cp-copper2[N*2+1])*sizeof(USHORT));
+}
 
 __attribute__((optimize("Os")))
 __attribute__((noinline))
 void StartC2P(void)
 {
-	register volatile UBYTE* _a0 ASM("a0") = ChunkFrame;
-	register volatile UBYTE* _a1 ASM("a1") = C2Pbuffer;
+	//Exchange planes
+	while(C2Pstate); //Wait end of prev c2p	
+	C2PsourceN=WorkChunkFrameN;
+	register volatile UBYTE* _a1 ASM("a1") = FastChunkFrame;
+	register volatile UBYTE* _a0 ASM("a0") = ChunkFrames[C2PsourceN];
+	if (_a1)
+	{
+		__asm volatile ("jsr CopyChunkFromC2P"
+			:"+r"(_a0),"+r"(_a1)
+			:
+			:"cc","memory"
+		);
+	}
+	custom->cop2lc=(ULONG)copper2[C2PsourceN*2];
+	WorkChunkFrameN^=1;
+	C2Pstate=1; //Start first pass
+	*copJ2_position=offsetof(struct Custom, copjmp2); //Go!
+}
+
+#else
+
+__attribute__((optimize("Os")))
+__attribute__((noinline))
+void StartC2P(void)
+{
+	C2PsourceN=WorkChunkFrameN;
+	WorkChunkFrameN^=1;
+	(void)(custom->dmaconr);
+	while(custom->dmaconr & (1<<14));
+	register volatile UBYTE* _a1 ASM("a1") = FastChunkFrame;
+	register volatile UBYTE* _a0 ASM("a0") = ChunkFrames[C2PsourceN];
+	if (_a1)
+	{
+		__asm volatile ("jsr CopyChunkFromC2P"
+			:"+r"(_a0),"+r"(_a1)
+			:
+			:"cc","memory"
+		);
+	}
+	_a0 = ChunkFrames[C2PsourceN];
+	_a1 = C2Pbuffer;
 	register volatile UBYTE* _a2 ASM("a2") = WorkPlanes;
 	__asm volatile ("jsr C2P"
 		:"+r"(_a0),"+r"(_a1),"+r"(_a2)
@@ -1051,14 +1445,18 @@ void StartC2P(void)
 	WorkPlanes=ShowPlanes;
 	ShowPlanes=p;
 	//Wait blitter
-	(void)(custom->dmaconr);
-	while(custom->dmaconr & (1<<14));
-	custom->bltdpt=ChunkFrame;
-	custom->bltdmod=0;
-	custom->bltcon1=0;
-	custom->bltcon0=DEST;
-	custom->bltsize=(200<<6)|40; //w=80 h=100
+	if (!FastChunkFrame)
+	{
+		(void)(custom->dmaconr);
+		while(custom->dmaconr & (1<<14));
+		custom->bltdpt=ChunkFrames[C2PsourceN];
+		custom->bltdmod=0;
+		custom->bltcon1=0;
+		custom->bltcon0=DEST;
+		custom->bltsize=(200<<6)|40; //w=80 h=100
+	}
 }
+#endif
 
 #else
 UBYTE *ChunkFrames[2] ALIGN4;
@@ -1085,19 +1483,33 @@ UBYTE **Xtabs[2] ALIGN4=
 	Xtab+160
 };
 
-static inline UBYTE *XtabCorrect_ysC(UBYTE *s)
-{
-	register volatile UBYTE *_a0 ASM("a0") = s;
-	__asm volatile("jsr XtabCorrect_ys":"+r"(_a0)::"cc");
-	return (UBYTE*)_a0;
-}
-
 __attribute__((optimize("Os")))
 __attribute__((noinline))
 void InitXtab(int N)
 {
 	UBYTE **p=Xtabs[N];
 	UBYTE *s = ChunkFrames[N];
+	s=XtabCorrect_ysC(s);
+	USHORT i;
+	i=40;
+	do
+	{
+		*p++=s;
+		*p++=s+8000;
+		*p++=s+1;
+		*p++=s+8001;
+		s+=200;
+	} 
+	while (--i);
+}
+
+__attribute__((optimize("Os")))
+__attribute__((noinline))
+void InitXtab_fast(void)
+{
+	if (!FastChunkFrame) return;
+	UBYTE **p=Xtab_fast;
+	UBYTE *s = FastChunkFrame;
 	s=XtabCorrect_ysC(s);
 	USHORT i;
 	i=40;
@@ -1207,20 +1619,31 @@ void CreateBlitterCList(int N)
 	*cp++=0xfffe; // end copper list
 }
 
-volatile USHORT* copJ2_position ALIGN4; //Poiters to trig copjmp2
-
 __attribute__((optimize("Os")))
 __attribute__((noinline))
 void StartC2P(void)
 {
 	while(*copJ2_position!=0x01FE);
+	if (FastChunkFrame)
+	{
+		register volatile UBYTE* _a1 ASM("a1") = FastChunkFrame;
+		register volatile UBYTE* _a0 ASM("a0") = ChunkFrames[0];
+		__asm volatile ("jsr CopyChunkFromC2P"
+			:"+r"(_a0),"+r"(_a1)
+			:
+			:"cc","memory"
+		);
+	}
+	else
+	{
 #ifdef CLEAR_CHUNKY_BY_BLITTER
-	while(!ClearChunkyScreenState);
-	Profile(26);
-	(void)(custom->dmaconr);
-	while(custom->dmaconr & (1<<14));
-	ClearChunkyScreenState=0;
+		while(!ClearChunkyScreenState);
+		Profile(26);
+		(void)(custom->dmaconr);
+		while(custom->dmaconr & (1<<14));
+		ClearChunkyScreenState=0;
 #endif
+	}
 	*copJ2_position=offsetof(struct Custom, copjmp2);
 	//Можно обменять буфера для рендера
 	UBYTE **xt;
@@ -1235,7 +1658,6 @@ void StartC2P(void)
 #endif
 
 volatile short frameCounter = 0;
-volatile short C2Pstate = 0;
 
 volatile UBYTE key_forward;
 volatile UBYTE key_back;
@@ -1321,6 +1743,28 @@ static __attribute__((interrupt)) void interruptHandler()
 	{
 		custom->intreq=INTF_COPER;
 #ifdef CMODE_PAL32
+#ifdef ONLY_BLITTER_C2P
+		UBYTE state=C2Pstate;
+		if (state==1)
+		{
+			//Pass 1 complete
+			//Set copper for pass 2
+			custom->cop2lc=(ULONG)copper2[C2PsourceN*2+1];
+			C2Pstate=2;
+		}
+		else if (state==2)
+		{
+			//Pass 2 complete
+			//Stop call c2p
+			*copJ2_position=0x01FE; //Nop
+			//Swap planes
+			UBYTE *p;
+			p=WorkPlanes;
+			WorkPlanes=ShowPlanes;
+			ShowPlanes=p;
+			C2Pstate=0;
+		}
+#endif
 
 #else
 		*copJ2_position=0x01FE; //Nop
@@ -1350,11 +1794,14 @@ static __attribute__((interrupt)) void interruptHandler()
 #ifdef CLEAR_CHUNKY_BY_BLITTER
 		//Start clear chunky screen by blitter
 		ClearChunkyScreenState=1; //Ready for wait blitter
-		custom->bltdpt=ChunkFrames[1];
-		custom->bltdmod=0;
-		custom->bltcon1=0;
-		custom->bltcon0=DEST;
-		custom->bltsize=(200<<6)|40; //w=80 h=100
+		if (!FastChunkFrame)
+		{
+			custom->bltdpt=ChunkFrames[1];
+			custom->bltdmod=0;
+			custom->bltcon1=0;
+			custom->bltcon0=DEST;
+			custom->bltsize=(200<<6)|40; //w=80 h=100
+		}
 #endif
 #endif
 	}
@@ -1457,9 +1904,15 @@ void PatchXtab_addrs(void)
 {
 	extern UBYTE **Xtab_patch1;
 	extern UBYTE **Xtab_patch2;
+	if (FastChunkFrame)
+	{
+		Xtab_patch1=Xtab_fast;
+		Xtab_patch2=Xtab_fast;
+		return;
+	}
 #ifdef CMODE_PAL32
-	Xtab_patch1=Xtab;
-	Xtab_patch2=Xtab;
+	Xtab_patch1=Xtabs[WorkChunkFrameN];
+	Xtab_patch2=Xtabs[WorkChunkFrameN];
 #else
 	Xtab_patch1=Xtabs[0];
 	Xtab_patch2=Xtabs[0];
@@ -1480,6 +1933,60 @@ char *i2a2(char *s, ULONG n)
   while (--i);
 }
 
+typedef struct
+{
+	ULONG id;
+	const char *text;
+}PROFILER_TEXT_ITEM;
+
+static const PROFILER_TEXT_ITEM ProfilerTexts[]=
+{
+	{0,"Init"},
+	{1,"Clear chunkyscreen"},
+	{2,"Construct BMATRIX"},
+	{3,"Find player node"},
+	{4,"Decrunch PVS"},
+	{5,"Rotate world"},
+	{6,"Prepare sort"},
+	{7,"Do sort"},
+	{8,"Prepare render"},
+	{9,"Filled render"},
+	{10,"Textured render"},
+	{11,"Backface culling"},
+	{12,"RMTX multiply"},
+	{13,"Box check"},
+	{14,"fmap culling"},
+	{15,"fmap scoords"},
+	{16,"fmap faceloop"},
+	{17,"tmap culling"},
+	{18,"tmap scoords"},
+	{19,"tmap faceloop"},
+	{20,"trapezoids begin"},
+	{21,"trapezoids end"},
+	{22,"slices begin"},
+	{23,"slices end"},
+	{24,"Filled render cleanup"},
+	{25,"Textured render cleanup"},
+	{26,"Wait for blitter"},
+	{27,"Prepare far faces"},
+	{28,"Cleanup far faces"},
+	{29,"Prepare mid faces"},
+	{30,"SplitFaceByZ"},
+	{31,"AddVertexesByY"},
+	{32,"Cleanup rest of far faces"},
+	{33,"Prepare near faces"},
+	{34,"SplitFaceByY"},
+	{35,"AddVertexesByX"},
+	{36,"SplitFaceByY (continue)"},
+	{37,"Cleanup mid faces"},
+	{38,"Cleanup near faces"},
+	{253,"StartC2P"},
+	{254,"Debug"},
+	{255,"Complete"},
+	{0xFFFFFFFF,"????"}
+};
+
+__attribute__((optimize("Os")))
 int main()
 {
 	ULONG render_time=0;
@@ -1516,24 +2023,16 @@ int main()
 	printf("Addr=%08lx, Rounded=%08lx, Ok\n",(ULONG)MemoryPoolAligned16,(ULONG)Texture);
 
 	if (LoadWorld()) goto L_abort;
+
+	FastChunkFrame=NULL;
+	FastChunkFrame=(UBYTE*)AllocVec(16000,MEMF_FAST);
+	if (FastChunkFrame)
+	{
+		printf("Chunk frame allocated in fastram!\n");
+
+	}
 #ifdef CMODE_PAL32
 	printf("Init bitmaps and copper...\n");
-
-	ChunkFrame=(UBYTE*)AllocVec(16000,MEMF_CHIP);
-	ZeroChunkyScreen(ChunkFrame);
-
-#if 0
-	ChunkFrame[1*2+0]=0xFF;
-	ChunkFrame[2*2+8000]=0xFF;
-	ChunkFrame[3*2+4000]=0xFF;
-	ChunkFrame[4*2+12000]=0xFF;
-
-	ChunkFrame[6*2+0]=0xCC;
-	ChunkFrame[7*2+8000]=0xCC;
-	ChunkFrame[8*2+4000]=0xCC;
-	ChunkFrame[9*2+12000]=0xCC;
-#endif
-	C2Pbuffer=(UBYTE*)AllocVec(8000,MEMF_CHIP);
 
 	struct BitMap *bitmap;
 	bitmap = AllocBitMap(320,2*5*100,1,BMF_DISPLAYABLE|BMF_CLEAR,NULL);
@@ -1553,6 +2052,44 @@ int main()
 	planes2[1]=(UBYTE*)(bitmap2->Planes[1]);
 	planes2[2]=(UBYTE*)(bitmap2->Planes[2]);
 	planes2[3]=(UBYTE*)(bitmap2->Planes[3]);
+
+	ChunkFrames[0]=(UBYTE*)AllocVec(16000,MEMF_CHIP);
+	ChunkFrames[1]=(UBYTE*)AllocVec(16000,MEMF_CHIP);
+	ZeroChunkyScreen(ChunkFrames[0]);
+	ZeroChunkyScreen(ChunkFrames[1]);
+
+#ifdef ONLY_BLITTER_C2P
+	printf("Init coppered blitter...\n");
+
+#if 0
+	UBYTE *ChunkFrame;
+	ChunkFrame=ChunkFrames[0];
+
+	ChunkFrame[1*2+0]=0xFF;
+	ChunkFrame[2*2+8000]=0xFF;
+	ChunkFrame[3*2+4000]=0xFF;
+	ChunkFrame[4*2+12000]=0xFF;
+
+	ChunkFrame[6*2+0]=0xCC;
+	ChunkFrame[7*2+8000]=0xCC;
+	ChunkFrame[8*2+4000]=0xCC;
+	ChunkFrame[9*2+12000]=0xCC;
+#endif
+
+
+	copper2[0]=(USHORT*)AllocVec(6144, MEMF_CHIP);
+	copper2[1]=(USHORT*)AllocVec(1024, MEMF_CHIP);
+	copper2[2]=(USHORT*)AllocVec(6144, MEMF_CHIP);
+	copper2[3]=(USHORT*)AllocVec(1024, MEMF_CHIP);
+
+	C2Pbuffer=(UBYTE*)AllocVec(16000,MEMF_CHIP);
+
+	CreateBlitterCList(0);
+	CreateBlitterCList(1);
+
+#else
+	C2Pbuffer=(UBYTE*)AllocVec(8000,MEMF_CHIP);
+#endif
 
 	USHORT* copper1 = (USHORT*)AllocVec(1024, MEMF_CHIP);
 	USHORT* copPtr = copper1;
@@ -1629,11 +2166,14 @@ int main()
 	*copPtr++=offsetof(struct Custom, bplcon3);
 	*copPtr++=0x0000;
 
+    copJ2_position=copPtr;
+	*copPtr++=0x01FE;	//Nop move
+	*copPtr++=0x7FFF;
+
 	copPtr = GenSplitScreen(copPtr, planes2);
 
 	*copPtr++=0xffff;
 	*copPtr++=0xfffe; // end copper list
-
 
 #else
 	printf("Init coppered blitter...\n");
@@ -1721,12 +2261,9 @@ int main()
 #endif
 	printf("Precalc...");	
 	InitRotations();
-#ifdef CMODE_PAL32
-	InitXtab();
-#else
+	InitXtab_fast();
 	InitXtab(0);
 	InitXtab(1);
-#endif
 	InitRDataPool();
 	InitDitherColorTable();
 	printf("Ok\n");
@@ -1744,6 +2281,9 @@ int main()
 	old_my=mxy>>8;
 
 #ifdef CMODE_PAL32
+#ifdef ONLY_BLITTER_C2P
+	custom->copcon=0x0002;
+#endif
 #else
 	custom->cop2lc=(ULONG)copper2[0];
 	custom->copcon=0x0002;
@@ -1791,16 +2331,37 @@ int main()
 		CacheClearU();
 		//custom->color[0]=0x600;
 		//ClearChunkyScreen(ChunkFrames[0]);
-#ifdef CMODE_PAL32
-#else
 	#ifdef CLEAR_CHUNKY_BY_BLITTER
 	#else
-		Profile(1);
-		ZeroChunkyScreen(ChunkFrames[0]);
+		if (!FastChunkFrame)
+		{
+			Profile(1);
+			ZeroChunkyScreen(ChunkFrames[WorkChunkFrameN]);
+		}
 	#endif
-#endif
+		if (FastChunkFrame)
+		{
+			Profile(1);
+			ZeroChunkyScreen(FastChunkFrame);
+		}
 	#if 1
 		RenderWorld(cam);
+	#else
+		{
+			UBYTE *ChunkFrame;
+			ChunkFrame=ChunkFrames[WorkChunkFrameN];
+
+			ChunkFrame[1*2+0]=0xFE;
+			ChunkFrame[2*2+8000]=0xFF;
+			ChunkFrame[3*2+4000]=0xFF;
+			ChunkFrame[4*2+12000]=0xFF;
+
+			ChunkFrame[6*2+0]=0xCC;
+			ChunkFrame[7*2+8000]=0xCC;
+			ChunkFrame[8*2+4000]=0xCC;
+			ChunkFrame[9*2+12000]=0xCC;
+
+		}
 	#endif
 		Profile(253);
 		StartC2P();
@@ -1827,9 +2388,19 @@ L_abort:
 	FreeBitMap(bitmap2);
 	FreeVec(MemoryPoolAligned16);
 	FreeVec(copper1);
+	if (FastChunkFrame)
+	{
+		FreeVec(FastChunkFrame);
+	}
 #ifdef CMODE_PAL32
-	FreeVec(ChunkFrame);
-	FreeVec(C2Pbuffer);
+#ifdef ONLY_BLITTER_C2P
+	FreeVec(copper2[0]);
+	FreeVec(copper2[1]);
+	FreeVec(copper2[2]);
+	FreeVec(copper2[3]);
+#endif
+	FreeVec(ChunkFrames[0]);
+	FreeVec(ChunkFrames[1]);
 #else
 	FreeVec(copper2[0]);
 	FreeVec(copper2[1]);
@@ -1842,54 +2413,13 @@ L_abort:
 	int prev_sl=0;
 	for(PROFILER_DATA *p=profiler_data; p!=ProfilerWP; p++)
 	{
-		const char *s;
-		s="???";
-		switch(p->stage)
+		const PROFILER_TEXT_ITEM *pi=ProfilerTexts;
+		while(pi->id!=0xFFFFFFFF && pi->id!=p->stage) pi++;
+		if (p->stage==255)
 		{
-		case 0: s="Init"; break;
-		case 1: s="Clear chunkyscreen"; break;
-		case 2: s="Construct BMATRIX"; break;
-		case 3: s="Find player node"; break;
-		case 4: s="Decrunch PVS"; break;
-		case 5: s="Rotate world"; break;
-		case 6: s="Prepare sort"; break;
-		case 7: s="Do sort"; break;
-		case 8: s="Prepare render"; break;
-		case 9: s="Filled render"; break;
-		case 10: s="Textured render"; break;
-		case 11: s="Backface culling"; break;
-		case 12: s="RMTX multiply"; break;
-		case 13: s="Box check"; break;
-		case 14: s="fmap culling"; break;
-		case 15: s="fmap scoords"; break;
-		case 16: s="fmap faceloop"; break;
-		case 17: s="tmap culling"; break;
-		case 18: s="tmap scoords"; break;
-		case 19: s="tmap faceloop"; break;
-		case 20: s="trapezoids begin"; break;
-		case 21: s="trapezoids end"; break;
-		case 22: s="slices begin"; break;
-		case 23: s="slices end"; break;
-		case 24: s="Filled render cleanup"; break;
-		case 25: s="Textured render cleanup"; break;
-		case 26: s="Wait for blitter"; break;
-		case 27: s="Prepare far faces"; break;
-		case 28: s="Cleanup far faces"; break;
-		case 29: s="Prepare mid faces"; break;
-		case 30: s="SplitFaceByZ"; break;
-		case 31: s="AddVertexesByY"; break;
-		case 32: s="Cleanup rest of far faces"; break;
-		case 33: s="Prepare near faces"; break;
-		case 34: s="SplitFaceByY"; break;
-		case 35: s="AddVertexesByX"; break;
-		case 36: s="SplitFaceByY (continue)"; break;
-		case 37: s="Cleanup mid faces"; break;
-		case 38: s="Cleanup near faces"; break;
-		case 253: s="StartC2P"; break;
-		case 254: s="Debug"; break;
-		case 255: s="Complete"; p[1].scanline=p->scanline; break;
+			p[1].scanline=p->scanline;
 		}
-		printf("Scanline %04ld, duration %04ld: %s\n",p->scanline,p[1].scanline-p->scanline,s);
+		printf("Scanline %04ld, duration %04ld: %s\n",p->scanline,p[1].scanline-p->scanline,pi->text);
 	}
 	FreeWorld();
 	CloseLibrary((struct Library*)DOSBase);
